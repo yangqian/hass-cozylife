@@ -37,9 +37,9 @@ Note that for we must have persistent IP address otherwise the config will chang
 
 ### Sample config
 
-Run
+Run the following getconfig.py with two parameters ip start and ip end.
 ```
-python3 getconfig.py
+python3 getconfig.py 192.168.1.193 192.168.1.194
 ```
 to obtain something like
 ```

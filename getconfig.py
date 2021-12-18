@@ -11,7 +11,7 @@ def ips(start, end):
     '''Return IPs in IPv4 range, inclusive. from stackoverflow'''
     start_int = int(ip_address(start).packed.hex(), 16)
     end_int = int(ip_address(end).packed.hex(), 16)
-    return [ip_address(ip).exploded for ip in range(start_int, end_int)]
+    return [ip_address(ip).exploded for ip in range(start_int, end_int+1)]
 
 
 print(f'light:')
