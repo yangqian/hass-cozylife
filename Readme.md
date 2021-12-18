@@ -62,8 +62,9 @@ Copy it to the relevant configuration file (yaml). Here the did is the same as o
 
 ### Optional requirements
 
-    [Circadian Lighting](https://github.com/claytonjn/hass-circadian_lighting)
-    I used a modified v1 version (with Astral v2 dependance). v2 is not tested.
+[Circadian Lighting](https://github.com/claytonjn/hass-circadian_lighting)
+
+I used a modified v1 version (with Astral v2 dependance). v2 is not tested.
 
 ## Notes and todo
 
@@ -79,11 +80,11 @@ Copy it to the relevant configuration file (yaml). Here the did is the same as o
 * '2': 0 normal change to color / color temperature with a transition period
 
 * '2': 1 with special effects
-* '4' brightness
-* '5' hue
-* '6' saturation
-* '8' speed of change
-* '7' consists of two bits of operator and 7 colors
+* '4': brightness
+* '5': hue
+* '6': saturation
+* '8': speed of change
+* '7': consists of two bits of operator and 7 colors
 
 * colors are in the format of HHHH SSSS TTTT
 where HHHH SSSS are hue and saturation.
