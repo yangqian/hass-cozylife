@@ -189,25 +189,28 @@ class CozyLifeLight(LightEntity):
 
         #warning: 3:65535 is detected for HS mode, order here matters
         #warning: 5:65535 for color temp mode, order here matters
-        if '3' in self._state:
-            #self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-            color_temp = self._state['3']
-            if color_temp < 60000:
-                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                self._attr_color_temp = int(
-                    self._max_mireds-self._state['3'] * self._miredsratio)
+        if '2' in self._state:
+            if self._state['2'] == 0:
+                if '3' in self._state:
+                    #self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                    color_temp = self._state['3']
+                    if color_temp < 60000:
+                        self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                        self._attr_color_temp = int(
+                            self._max_mireds-self._state['3'] * self._miredsratio)
 
-        if '4' in self._state:
-            self._attr_brightness = int(self._state['4'] / 1000 * 255)
+                if '4' in self._state:
+                    self._attr_brightness = int(self._state['4'] / 1000 * 255)
 
-        if '5' in self._state:
-            color = self._state['5']
-            if color < 60000:
-                self._attr_color_mode = COLOR_MODE_HS
-                r, g, b = colorutil.color_hs_to_RGB(
-                    int(self._state['5']), int(self._state['6'] / 10))
-                hs_color = colorutil.color_RGB_to_hs(r*0.80, g, b)
-                self._attr_hs_color = hs_color
+                if '5' in self._state:
+                    color = self._state['5']
+                    if color < 60000:
+                        self._attr_color_mode = COLOR_MODE_HS
+                        r, g, b = colorutil.color_hs_to_RGB(
+                            int(self._state['5']), int(self._state['6'] / 10))
+                        ## May need to adjust
+                        hs_color = colorutil.color_RGB_to_hs(r, g, b)
+                        self._attr_hs_color = hs_color
 
     #autobrightness from circadian_lighting if enabled
     def calc_brightness(self):
