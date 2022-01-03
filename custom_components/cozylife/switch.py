@@ -25,30 +25,43 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.info('switch')
 
+SCAN_INTERVAL = timedelta(seconds=240)
 
-def setup_platform(
+async def setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
-    add_entities: AddEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None
 ) -> None:
     """Set up the sensor platform."""
     # We only want this platform to be set up via discovery.
     # logging.info('setup_platform', hass, config, add_entities, discovery_info)
     _LOGGER.info('setup_platform')
-    _LOGGER.info(f'ip={hass.data[DOMAIN]}')
     
     if discovery_info is None:
         return
 
 
-    switchs = []
-    return
-    for item in hass.data[DOMAIN]['tcp_client']:
-        if SWITCH_TYPE_CODE == item.device_type_code:
-            switchs.append(CozyLifeSwitch(item))
+    switches = []
+    for item in config.get('switches'):
+        client = tcp_client(item.get('ip'))
+        client._device_id = item.get('did')
+        client._pid = item.get('pid')
+        client._dpid = item.get('dpid')
+        client._device_model_name = item.get('dmn')
+        switches.append(CozyLifeSwitch(client))
 
-    add_entities(switchs)
+    async_add_entities(switches)
+    for switch in switches:
+        await hass.async_add_executor_job(switch._tcp_client._initSocket)
+        await asyncio.sleep(0.01)
+
+    async def async_update(now=None):
+        for switch in switches:
+            await hass.async_add_executor_job(switch._refresh_state)
+            await asyncio.sleep(0.01)
+
+    async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
 
 class CozyLifeSwitch(SwitchEntity):
