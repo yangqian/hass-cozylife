@@ -32,6 +32,7 @@ SCAN_INTERVAL = timedelta(seconds=240)
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.info(__name__)
 
+SCAN_INTERVAL = timedelta(seconds=240)
 
 async def async_setup_platform(
     hass: HomeAssistant,
@@ -70,15 +71,6 @@ async def async_setup_platform(
     async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
 
-    #switchs = []
-    #return
-    #for item in hass.data[DOMAIN]['tcp_client']:
-    #    if SWITCH_TYPE_CODE == item.device_type_code:
-    #        switchs.append(CozyLifeSwitch(item))
-
-    #add_entities(switchs)
-
-
 class CozyLifeSwitch(SwitchEntity):
     _tcp_client = None
     _attr_is_on = True
@@ -94,7 +86,7 @@ class CozyLifeSwitch(SwitchEntity):
     
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
-        
+
     def _refresh_state(self):
         self._state = self._tcp_client.query()
         _LOGGER.info(f'_name={self._name},_state={self._state}')

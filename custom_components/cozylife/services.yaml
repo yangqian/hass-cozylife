@@ -1,0 +1,21 @@
+set_mode:
+  name: Set effect
+  description: Set a the light effect.
+  target:
+    entity:
+      integration: cozylife
+      domain: light
+  fields:
+    mode:
+      name: Effect
+      description: Light effect.
+      required: true
+      selector:
+        select:
+          options:
+            - 'manual'
+            - 'natural'
+            - 'sleep'
+            - 'warm'
+            - 'study'
+            - 'chrismas'

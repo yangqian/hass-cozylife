@@ -44,5 +44,5 @@ for ip in ips(start, end):
       buf.write(f'    dpid: {a._dpid}')
 print(f'switch:')
 print(f'- platform: cozylife')
-print(f'  switchs:')
+print(f'  switches:')
 print(buf.getvalue())
