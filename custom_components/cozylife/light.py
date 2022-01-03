@@ -31,9 +31,10 @@ from homeassistant.components.light import (
     SUPPORT_TRANSITION,
     LightEntity,
 )
-from homeassistant.const import TEMP_CELSIUS
+from homeassistant.const import TEMP_CELSIUS, CONF_EFFECT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from typing import Any, Final, Literal, TypedDict, final
 from .const import (
@@ -84,6 +85,11 @@ except:
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.info(__name__)
 
+SERVICE_SET_EFFECT = "set_effect"
+scenes = ['manual','natural','sleep','warm','study','chrismas']
+SERVICE_SCHEMA_SET_EFFECT = {
+vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in scenes])
+}
 
 async def async_setup_platform(
     hass: HomeAssistant,
@@ -109,7 +115,7 @@ async def async_setup_platform(
         client._pid = item.get('pid')
         client._dpid = item.get('dpid')
         client._device_model_name = item.get('dmn')
-        lights.append(CozyLifeLight(client, hass))
+        lights.append(CozyLifeLight(client, hass, scenes))
 
     async_add_devices(lights)
     for light in lights:
@@ -122,6 +128,12 @@ async def async_setup_platform(
             await asyncio.sleep(0.01)
     async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
+    platform = entity_platform.async_get_current_platform()
+
+    platform.async_register_entity_service(
+        SERVICE_SET_EFFECT, SERVICE_SCHEMA_SET_EFFECT, "async_set_effect"
+    )
+
 
 class CozyLifeLight(LightEntity):
     # _attr_brightness: int | None = None
@@ -131,7 +143,7 @@ class CozyLifeLight(LightEntity):
     _tcp_client = None
 
     _attr_supported_color_modes = {
-        COLOR_MODE_HS, COLOR_MODE_COLOR_TEMP, COLOR_MODE_BRIGHTNESS, COLOR_MODE_ONOFF}
+        COLOR_MODE_BRIGHTNESS, COLOR_MODE_ONOFF}
     _attr_color_mode = COLOR_MODE_BRIGHTNESS
 
     _unique_id = ''
@@ -141,12 +153,15 @@ class CozyLifeLight(LightEntity):
     _attr_color_temp = 153
     _attr_hs_color = (0, 0)
 
-    def __init__(self, tcp_client: tcp_client, hass) -> None:
+    def __init__(self, tcp_client: tcp_client, hass, scenes) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
+        self._scenes = scenes
+        self._effect = 'manual'
+        #self._lasteffect = 'manual'
 
         #circardianlighting initialize
         self._cl = None
@@ -172,10 +187,28 @@ class CozyLifeLight(LightEntity):
         _LOGGER.info(f'after:{self._unique_id}._attr_color_mode={self._attr_color_mode}._attr_supported_color_modes='
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
 
+
         self._refresh_state()
+        self.SUPPORT_COZYLIGHT = self.get_supported_features()
 
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
+
+    async def async_set_effect(self, effect: str):
+        """Set the effect regardless it is On or Off."""
+        _LOGGER.warning(f'effect:{effect}')
+        self._effect = effect
+
+    @property
+    def effect(self):
+        """Return the current effect."""
+        return self._effect
+
+    @property
+    def effect_list(self):
+        """Return the list of supported effects.
+        """
+        return self._scenes
 
     def _refresh_state(self):
         """
@@ -187,41 +220,50 @@ class CozyLifeLight(LightEntity):
         if self._state:
             self._attr_is_on = 0 < self._state['1']
 
-        #warning: 3:65535 is detected for HS mode, order here matters
-        #warning: 5:65535 for color temp mode, order here matters
-        if '2' in self._state:
-            if self._state['2'] == 0:
-                if '3' in self._state:
-                    #self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                    color_temp = self._state['3']
-                    if color_temp < 60000:
-                        self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                        self._attr_color_temp = int(
-                            self._max_mireds-self._state['3'] * self._miredsratio)
+            #warning: 3:65535 is detected for HS mode, order here matters
+            #warning: 5:65535 for color temp mode, order here matters
+            if '2' in self._state:
+                if self._state['2'] == 0:
+                    if '3' in self._state:
+                        #self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                        color_temp = self._state['3']
+                        if color_temp < 60000:
+                            self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                            self._attr_color_temp = round(
+                                self._max_mireds-self._state['3'] * self._miredsratio)
 
-                if '4' in self._state:
-                    self._attr_brightness = int(self._state['4'] / 1000 * 255)
+                    if '4' in self._state:
+                        self._attr_brightness = int(self._state['4'] / 1000 * 255)
 
-                if '5' in self._state:
-                    color = self._state['5']
-                    if color < 60000:
-                        self._attr_color_mode = COLOR_MODE_HS
-                        r, g, b = colorutil.color_hs_to_RGB(
-                            int(self._state['5']), int(self._state['6'] / 10))
-                        ## May need to adjust
-                        hs_color = colorutil.color_RGB_to_hs(r, g, b)
-                        self._attr_hs_color = hs_color
+                    if '5' in self._state:
+                        color = self._state['5']
+                        if color < 60000:
+                            self._attr_color_mode = COLOR_MODE_HS
+                            r, g, b = colorutil.color_hs_to_RGB(
+                                round(self._state['5']), round(self._state['6'] / 10))
+                            ## May need to adjust
+                            hs_color = colorutil.color_RGB_to_hs(r, g, b)
+                            self._attr_hs_color = hs_color
 
     #autobrightness from circadian_lighting if enabled
+    def calc_color_temp(self):
+        if self._cl == None:
+          self._cl = self.hass.data.get(DATA_CIRCADIAN_LIGHTING)
+          if self._cl == None:
+            return None
+        colortemp_in_kelvin = self._cl.data['colortemp']
+        autocolortemp = colorutil.color_temperature_kelvin_to_mired(
+            colortemp_in_kelvin)
+        return autocolortemp
     def calc_brightness(self):
         if self._cl == None:
           self._cl = self.hass.data.get(DATA_CIRCADIAN_LIGHTING)
           if self._cl == None:
-            return self.brightness
+            return None
         if self._cl.data['percent'] > 0:
             return self._max_brightness
         else:
-            return int(((self._max_brightness - self._min_brightness) * ((100+self._cl.data['percent']) / 100)) + self._min_brightness)
+            return round(((self._max_brightness - self._min_brightness) * ((100+self._cl.data['percent']) / 100)) + self._min_brightness)
 
     @property
     def name(self) -> str:
@@ -251,55 +293,87 @@ class CozyLifeLight(LightEntity):
         # tuple
         hs_color = kwargs.get(ATTR_HS_COLOR)
 
-        rgb = kwargs.get(ATTR_RGB_COLOR)
-        flash = kwargs.get(ATTR_FLASH)
+        # rgb = kwargs.get(ATTR_RGB_COLOR)
+        #flash = kwargs.get(ATTR_FLASH)
         effect = kwargs.get(ATTR_EFFECT)
-        _LOGGER.info(
+        _LOGGER.warning(
             f'turn_on.kwargs={kwargs},colortemp={colortemp},hs_color={hs_color}')
+        
 
         payload = {'1': 255, '2': 0}
         count = 0
+        effectManual = False
         if brightness is not None:
             # Color: mininum light brightness 12, max 1000
             # White mininum light brightness 4, max 1000
-            payload['4'] = int(brightness / 255 * 1000)
+            if CIRCADIAN_BRIGHTNESS:
+                autobrightness = self.calc_brightness()
+                if abs(brightness - autobrightness) <5:
+                    self._effect = 'natural'
+                else:
+                    self._effect = 'manual'
+                    effectManual = True
+            payload['4'] = round(brightness / 255 * 1000)
             self._attr_brightness = brightness
             count += 1
 
         if colortemp is not None:
             # 0-694
-            self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+            if CIRCADIAN_BRIGHTNESS:
+                autocolortemp = self.calc_color_temp()
+                if effectManual == False:
+                    if abs(colortemp - autocolortemp) <5:
+                        self._effect = 'natural'
+                    else:
+                        self._effect = 'manual'
             #payload['3'] = 1000 - colortemp * 2
             #self._attr_color_temp = int(self._max_mireds-self._state['3'] * self._miredsratio)
             payload['3'] = 1000 - \
-                int((colortemp - self._min_mireds) / self._miredsratio)
+                round((colortemp - self._min_mireds) / self._miredsratio)
             count += 1
 
         if hs_color is not None:
             # 0-360
             # 0-1000
+            self._effect = 'manual'
             self._attr_color_mode = COLOR_MODE_HS
             self._attr_hs_color = hs_color
             r, g, b = colorutil.color_hs_to_RGB(*hs_color)
             # color is not balanced right. needs additional tuning
             hs_color = colorutil.color_RGB_to_hs(r, g, b)
-            payload['5'] = int(hs_color[0])
-            payload['6'] = int(hs_color[1] * 10)
+            payload['5'] = round(hs_color[0])
+            payload['6'] = round(hs_color[1] * 10)
             count += 1
 
-        if count == 0:
+        if count == 0 or effect is not None:
             #autocolortemp when brightness color temp and hs_color is not set
-            if CIRCADIAN_BRIGHTNESS:
-                brightness = self.calc_brightness()
-                payload['4'] = int(brightness / 255 * 1000)
-                self._attr_brightness = brightness
-                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                colortemp_in_kelvin = self._cl.data['colortemp']
-                colortemp = colorutil.color_temperature_kelvin_to_mired(
-                    colortemp_in_kelvin)
-                payload['3'] = 1000 - \
-                    int((colortemp - self._min_mireds) / self._miredsratio)
-                _LOGGER.info(f'color={colortemp},payload3={payload["3"]}')
+
+            if effect is not None: 
+                self._effect = effect
+            if self._effect == 'natural':
+                if CIRCADIAN_BRIGHTNESS:
+                    brightness = self.calc_brightness()
+                    payload['4'] = round(brightness / 255 * 1000)
+                    self._attr_brightness = brightness
+                    self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                    colortemp = self.calc_color_temp()
+                    payload['3'] = 1000 - \
+                        round((colortemp - self._min_mireds) / self._miredsratio)
+                    _LOGGER.info(f'color={colortemp},payload3={payload["3"]}')
+            elif self._effect == 'sleep':
+                    payload['4'] = 4
+                    payload['3'] = 0
+            elif self._effect == 'study':
+                    payload['4'] = 1000
+                    payload['3'] = 1000
+            elif self._effect == 'warm':
+                    payload['4'] = 1000
+                    payload['3'] = 0
+            elif self._effect == 'chrismas':
+                    payload['2'] = 1
+                    payload['4'] = 1000
+                    payload['8'] = 500
+                    payload['7'] = '03000003E8FFFF007803E8FFFF00F003E8FFFF003C03E8FFFF00B403E8FFFF010E03E8FFFF002603E8FFFF'
 
         await self.hass.async_add_executor_job(self._tcp_client.control, payload)
         # self._refresh_state()
@@ -362,3 +436,26 @@ class CozyLifeLight(LightEntity):
     @property
     def assumed_state(self):
         return True
+
+    @property
+    def supported_features(self) -> int:
+        """Flag supported features."""
+        return self.SUPPORT_COZYLIGHT
+
+    def get_supported_features(self) -> int:
+        """Flag supported features."""
+        self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+        features = 0
+        try:
+            # Map features for better reading
+            features = features | SUPPORT_EFFECT
+            if COLOR_MODE_BRIGHTNESS in self._attr_supported_color_modes:
+                features = features | SUPPORT_BRIGHTNESS
+            if COLOR_MODE_HS in self._attr_supported_color_modes:
+                features = features | SUPPORT_COLOR
+            if COLOR_MODE_COLOR_TEMP in self._attr_supported_color_modes:
+                features = features | SUPPORT_COLOR_TEMP
+        except:
+            pass
+        # fallback
+        return features
