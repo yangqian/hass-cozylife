@@ -27,7 +27,7 @@ from .const import (
     SAT,
 )
 
-SCAN_INTERVAL = timedelta(seconds=240)
+SCAN_INTERVAL = timedelta(seconds=20)
 
 _LOGGER = logging.getLogger(__name__)
 _LOGGER.info(__name__)
@@ -81,7 +81,7 @@ class CozyLifeSwitch(SwitchEntity):
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
-        self._name = tcp_client.device_model_name
+        self._name = tcp_client.device_id[-4:]
         self._refresh_state()
     
     async def async_update(self):

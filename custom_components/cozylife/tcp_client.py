@@ -239,7 +239,7 @@ class tcp_client(object):
         except Exception as e:
             # print(f'e={e}')
             _LOGGER.info(f'_only_send.recv.error:{e}')
-            return {}
+            return None
 
     def _only_send(self, cmd: int, payload: dict) -> None:
         """
