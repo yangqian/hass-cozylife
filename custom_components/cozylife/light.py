@@ -196,7 +196,7 @@ class CozyLifeLight(LightEntity):
 
     async def async_set_effect(self, effect: str):
         """Set the effect regardless it is On or Off."""
-        _LOGGER.warning(f'effect:{effect}')
+        _LOGGER.info(f'effect:{effect}')
         self._effect = effect
 
     @property
@@ -220,8 +220,6 @@ class CozyLifeLight(LightEntity):
         if self._state:
             self._attr_is_on = 0 < self._state['1']
 
-            #warning: 3:65535 is detected for HS mode, order here matters
-            #warning: 5:65535 for color temp mode, order here matters
             if '2' in self._state:
                 if self._state['2'] == 0:
                     if '3' in self._state:
@@ -296,7 +294,7 @@ class CozyLifeLight(LightEntity):
         # rgb = kwargs.get(ATTR_RGB_COLOR)
         #flash = kwargs.get(ATTR_FLASH)
         effect = kwargs.get(ATTR_EFFECT)
-        _LOGGER.warning(
+        _LOGGER.info(
             f'turn_on.kwargs={kwargs},colortemp={colortemp},hs_color={hs_color}')
         
 
