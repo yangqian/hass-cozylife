@@ -503,11 +503,11 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
     def get_supported_features(self) -> int:
         """Flag supported features."""
         features = 0
+        features = features | SUPPORT_EFFECT
         try:
             # Map features for better reading
             if COLOR_MODE_BRIGHTNESS in self._attr_supported_color_modes:
                 features = features | SUPPORT_BRIGHTNESS
-                features = features | SUPPORT_EFFECT
             if COLOR_MODE_HS in self._attr_supported_color_modes:
                 features = features | SUPPORT_COLOR
             if COLOR_MODE_COLOR_TEMP in self._attr_supported_color_modes:
