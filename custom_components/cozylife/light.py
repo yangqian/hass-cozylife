@@ -73,6 +73,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 
 SCAN_INTERVAL = timedelta(seconds=240)
+SWITCH_SCAN_INTERVAL = timedelta(seconds=20)
 
 
 CIRCADIAN_BRIGHTNESS = True
@@ -109,13 +110,18 @@ async def async_setup_platform(
     #    return
 
     lights = []
+    # treat switch as light in home assistant
+    switches = []
     for item in config.get('lights'):
         client = tcp_client(item.get('ip'))
         client._device_id = item.get('did')
         client._pid = item.get('pid')
         client._dpid = item.get('dpid')
         client._device_model_name = item.get('dmn')
-        lights.append(CozyLifeLight(client, hass, scenes))
+        if 'switch' not in client._device_model_name.lower():
+          lights.append(CozyLifeLight(client, hass, scenes))
+        else:
+          switches.append(CozyLifeSwitchAsLight(client, hass))
 
     async_add_devices(lights)
     for light in lights:
@@ -128,6 +134,17 @@ async def async_setup_platform(
             await asyncio.sleep(0.01)
     async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
+    async_add_devices(switches)
+    for light in switches:
+        await hass.async_add_executor_job(light._tcp_client._initSocket)
+        await asyncio.sleep(0.01)
+
+    async def async_update(now=None):
+        for light in switches:
+            await hass.async_add_executor_job(light._refresh_state)
+            await asyncio.sleep(0.01)
+    async_track_time_interval(hass, async_update, SWITCH_SCAN_INTERVAL)
+
     platform = entity_platform.async_get_current_platform()
 
     platform.async_register_entity_service(
@@ -135,7 +152,79 @@ async def async_setup_platform(
     )
 
 
-class CozyLifeLight(LightEntity):
+
+
+
+class CozyLifeSwitchAsLight(LightEntity):
+    _tcp_client = None
+    _attr_is_on = True
+    
+    def __init__(self, tcp_client: tcp_client, hass) -> None:
+        """Initialize the sensor."""
+        _LOGGER.info('__init__')
+        self.hass = hass
+        self._tcp_client = tcp_client
+        self._unique_id = tcp_client.device_id
+        self._name = tcp_client.device_id[-4:]
+        self._refresh_state()
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID."""
+        return self._unique_id
+    
+    async def async_update(self):
+        await self.hass.async_add_executor_job(self._refresh_state)
+
+    def _refresh_state(self):
+        self._state = self._tcp_client.query()
+        _LOGGER.info(f'_name={self._name},_state={self._state}')
+        if self._state:
+            self._attr_is_on = 0 < self._state['1']
+    
+    @property
+    def name(self) -> str:
+        return 'cozylife:' + self._name
+    
+    @property
+    def available(self) -> bool:
+        """Return if the device is available."""
+        if self._tcp_client._connect:
+            return True
+        else:
+            return False
+    
+    @property
+    def is_on(self) -> bool:
+        """Return True if entity is on."""
+        return self._attr_is_on
+    
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the entity on."""
+        self._attr_is_on = True
+
+        _LOGGER.info(f'turn_on:{kwargs}')
+
+        await self.hass.async_add_executor_job(self._tcp_client.control, {
+            '1': 1
+        })
+
+        return None
+    
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the entity off."""
+        self._attr_is_on = False
+
+        _LOGGER.info('turn_off')
+
+        await self.hass.async_add_executor_job(self._tcp_client.control, {
+            '1': 0
+        })
+        
+        return None
+
+
+class CozyLifeLight(CozyLifeSwitchAsLight):
     # _attr_brightness: int | None = None
     # _attr_color_mode: str | None = None
     # _attr_color_temp: int | None = None
@@ -143,7 +232,7 @@ class CozyLifeLight(LightEntity):
     _tcp_client = None
 
     _attr_supported_color_modes = {
-        COLOR_MODE_BRIGHTNESS, COLOR_MODE_ONOFF}
+        COLOR_MODE_ONOFF}
     _attr_color_mode = COLOR_MODE_BRIGHTNESS
 
     _unique_id = ''
@@ -167,7 +256,7 @@ class CozyLifeLight(LightEntity):
         self._cl = None
         self._max_brightness = 255
         self._min_brightness = 1
-        #self._name = tcp_client.device_model_name
+        #self._name = tcp_client._device_model_name
         _LOGGER.info(f'before:{self._unique_id}._attr_color_mode={self._attr_color_mode}._attr_supported_color_modes='
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
         self._name = tcp_client.device_id[-4:]
@@ -176,13 +265,18 @@ class CozyLifeLight(LightEntity):
         self._miredsratio = (self._max_mireds - self._min_mireds)/1000
 
         # h s
-        if 3 in tcp_client.dpid:
-            self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-            self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+        if not 'switch' in self._tcp_client._device_model_name.lower():
 
-        if 5 in tcp_client.dpid or 6 in tcp_client.dpid:
-            self._attr_color_mode = COLOR_MODE_HS
-            self._attr_supported_color_modes.add(COLOR_MODE_HS)
+            if 3 in tcp_client.dpid:
+                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+
+            if 4 in tcp_client.dpid:
+                self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+
+            if 5 in tcp_client.dpid or 6 in tcp_client.dpid:
+                self._attr_color_mode = COLOR_MODE_HS
+                self._attr_supported_color_modes.add(COLOR_MODE_HS)
 
         _LOGGER.info(f'after:{self._unique_id}._attr_color_mode={self._attr_color_mode}._attr_supported_color_modes='
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
@@ -190,9 +284,6 @@ class CozyLifeLight(LightEntity):
 
         self._refresh_state()
         self.SUPPORT_COZYLIGHT = self.get_supported_features()
-
-    async def async_update(self):
-        await self.hass.async_add_executor_job(self._refresh_state)
 
     async def async_set_effect(self, effect: str):
         """Set the effect regardless it is On or Off."""
@@ -263,15 +354,6 @@ class CozyLifeLight(LightEntity):
         else:
             return round(((self._max_brightness - self._min_brightness) * ((100+self._cl.data['percent']) / 100)) + self._min_brightness)
 
-    @property
-    def name(self) -> str:
-        return 'cozylife:' + self._name
-
-    @property
-    def is_on(self) -> bool:
-        """Return True if entity is on."""
-        # self._refresh_state()
-        return self._attr_is_on
 
     @property
     def color_temp(self) -> int | None:
@@ -377,15 +459,6 @@ class CozyLifeLight(LightEntity):
         # self._refresh_state()
         return None
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the entity off."""
-        self._attr_is_on = False
-        _LOGGER.info(f'turn_off.kwargs={kwargs}')
-        payload = {'1': 0}
-        await self.hass.async_add_executor_job(self._tcp_client.control, payload)
-        # self._refresh_state()
-
-        return None
 
     @property
     def hs_color(self) -> tuple[float, float] | None:
@@ -408,15 +481,6 @@ class CozyLifeLight(LightEntity):
         return self._attr_color_mode
 
     @property
-    def available(self):
-        """Return True if device is available."""
-        #return True
-        if self._tcp_client._connect:
-            return True
-        else:
-            return False
-
-    @property
     def min_mireds(self):
         """Return color temperature min mireds."""
         return self._min_mireds
@@ -426,10 +490,6 @@ class CozyLifeLight(LightEntity):
         """Return color temperature max mireds."""
         return self._max_mireds
 
-    @property
-    def unique_id(self) -> str | None:
-        """Return a unique ID."""
-        return self._unique_id
 
     @property
     def assumed_state(self):
@@ -442,13 +502,12 @@ class CozyLifeLight(LightEntity):
 
     def get_supported_features(self) -> int:
         """Flag supported features."""
-        self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
         features = 0
         try:
             # Map features for better reading
-            features = features | SUPPORT_EFFECT
             if COLOR_MODE_BRIGHTNESS in self._attr_supported_color_modes:
                 features = features | SUPPORT_BRIGHTNESS
+                features = features | SUPPORT_EFFECT
             if COLOR_MODE_HS in self._attr_supported_color_modes:
                 features = features | SUPPORT_COLOR
             if COLOR_MODE_COLOR_TEMP in self._attr_supported_color_modes:
