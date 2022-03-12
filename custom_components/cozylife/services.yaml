@@ -1,4 +1,21 @@
-set_mode:
+set_all_effect:
+  name: Set all effect
+  description: Set all the cozylight effect.
+  fields:
+    effect:
+      name: Effect
+      description: Light effect.
+      required: true
+      selector:
+        select:
+          options:
+            - 'manual'
+            - 'natural'
+            - 'sleep'
+            - 'warm'
+            - 'study'
+            - 'chrismas'
+set_effect:
   name: Set effect
   description: Set a the light effect.
   target:
@@ -6,7 +23,7 @@ set_mode:
       integration: cozylife
       domain: light
   fields:
-    mode:
+    effect:
       name: Effect
       description: Light effect.
       required: true

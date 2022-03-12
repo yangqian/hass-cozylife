@@ -32,7 +32,7 @@ from homeassistant.components.light import (
     LightEntity,
 )
 from homeassistant.const import TEMP_CELSIUS, CONF_EFFECT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
@@ -87,7 +87,11 @@ _LOGGER = logging.getLogger(__name__)
 _LOGGER.info(__name__)
 
 SERVICE_SET_EFFECT = "set_effect"
+SERVICE_SET_ALL_EFFECT = "set_all_effect"
 scenes = ['manual','natural','sleep','warm','study','chrismas']
+SERVICE_SCHEMA_SET_ALL_EFFECT = {
+vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in scenes])
+}
 SERVICE_SCHEMA_SET_EFFECT = {
 vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in scenes])
 }
@@ -130,7 +134,10 @@ async def async_setup_platform(
 
     async def async_update(now=None):
         for light in lights:
-            await hass.async_add_executor_job(light._refresh_state)
+            if light._attr_is_on and light._effect ==  'natural':
+              await light.async_turn_on(effect='natural')
+            else:
+              await hass.async_add_executor_job(light._refresh_state)
             await asyncio.sleep(0.01)
     async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
@@ -150,6 +157,11 @@ async def async_setup_platform(
     platform.async_register_entity_service(
         SERVICE_SET_EFFECT, SERVICE_SCHEMA_SET_EFFECT, "async_set_effect"
     )
+    async def async_set_all_effect(call:ServiceCall):
+        for light in lights:
+            await light.async_set_effect(call.data.get(ATTR_EFFECT))
+            await asyncio.sleep(0.01)
+    hass.services.async_register(DOMAIN, SERVICE_SET_ALL_EFFECT, async_set_all_effect)
 
 
 
@@ -287,8 +299,11 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
 
     async def async_set_effect(self, effect: str):
         """Set the effect regardless it is On or Off."""
-        _LOGGER.info(f'effect:{effect}')
-        self._effect = effect
+        _LOGGER.info(f'onoff:{self._attr_is_on} effect:{effect}')
+        if self._attr_is_on:
+            await self.async_turn_on(effect=effect)
+        else:
+          self._effect = effect
 
     @property
     def effect(self):
