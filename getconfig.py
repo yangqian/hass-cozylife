@@ -14,18 +14,25 @@ def ips(start, end):
     return [ip_address(ip).exploded for ip in range(start_int, end_int+1)]
 
 
+
+#for i in range(214, 192, -1):
+start = '192.168.1.193'
+end = '192.168.1.254'
+if len(sys.argv) == 2:
+  end = sys.argv[1]
+  start = sys.argv[1]
+if len(sys.argv) > 2:
+  end = sys.argv[2]
+  start = sys.argv[1]
+probelist = ips(start, end) 
+print("IP scan from {0}, end with {1}".format(probelist[0],probelist[-1]))
+
 print(f'light:')
 print(f'- platform: cozylife')
 print(f'  lights:')
 buf = StringIO()
 
-#for i in range(214, 192, -1):
-start = '192.168.1.193'
-end = '192.168.1.254'
-if len(sys.argv) > 2:
-  end = sys.argv[2]
-  start = sys.argv[1]
-for ip in ips(start, end):
+for ip in probelist:
   a = tcp_client(ip, timeout=0.1)
   a._initSocket()
   if a._connect:

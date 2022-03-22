@@ -456,8 +456,16 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
                         round((colortemp - self._min_mireds) / self._miredsratio)
                     _LOGGER.info(f'color={colortemp},payload3={payload["3"]}')
             elif self._effect == 'sleep':
-                    payload['4'] = 4
-                    payload['3'] = 0
+                    #payload['4'] = 4
+                    #payload['3'] = 0
+                    #payload['4'] = 12
+                    brightness = 5
+                    self._attr_brightness = brightness
+                    payload['4'] = round(brightness / 255 * 1000)
+                    self._attr_color_mode = COLOR_MODE_HS
+                    self._attr_hs_color = (16,100)
+                    payload['5'] = round(16)
+                    payload['6'] = round(1000)
             elif self._effect == 'study':
                     payload['4'] = 1000
                     payload['3'] = 1000
