@@ -253,6 +253,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
     _attr_brightness = 0
     _attr_color_temp = 153
     _attr_hs_color = (0, 0)
+    _transitioning = 0
 
     def __init__(self, tcp_client: tcp_client, hass, scenes) -> None:
         """Initialize the sensor."""
@@ -300,10 +301,10 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
     async def async_set_effect(self, effect: str):
         """Set the effect regardless it is On or Off."""
         _LOGGER.info(f'onoff:{self._attr_is_on} effect:{effect}')
+        self._effect = effect
         if self._attr_is_on:
             await self.async_turn_on(effect=effect)
-        else:
-          self._effect = effect
+          
 
     @property
     def effect(self):
@@ -388,41 +389,36 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
         # tuple
         hs_color = kwargs.get(ATTR_HS_COLOR)
 
+        transition = kwargs.get(ATTR_TRANSITION)
+
+            
+
         # rgb = kwargs.get(ATTR_RGB_COLOR)
         #flash = kwargs.get(ATTR_FLASH)
         effect = kwargs.get(ATTR_EFFECT)
         _LOGGER.info(
             f'turn_on.kwargs={kwargs},colortemp={colortemp},hs_color={hs_color}')
-        
+        originalbrightness = 0
+        originalcolortemp = self._attr_color_temp
+        originalhs= self._attr_hs_color
+
+        if self._attr_is_on:
+          originalbrightness = self._attr_brightness
 
         payload = {'1': 255, '2': 0}
         count = 0
-        effectManual = False
         if brightness is not None:
             # Color: mininum light brightness 12, max 1000
             # White mininum light brightness 4, max 1000
-            if CIRCADIAN_BRIGHTNESS:
-                autobrightness = self.calc_brightness()
-                if abs(brightness - autobrightness) <5:
-                    self._effect = 'natural'
-                else:
-                    self._effect = 'manual'
-                    effectManual = True
             payload['4'] = round(brightness / 255 * 1000)
             self._attr_brightness = brightness
             count += 1
 
         if colortemp is not None:
             # 0-694
-            if CIRCADIAN_BRIGHTNESS:
-                autocolortemp = self.calc_color_temp()
-                if effectManual == False:
-                    if abs(colortemp - autocolortemp) <5:
-                        self._effect = 'natural'
-                    else:
-                        self._effect = 'manual'
             #payload['3'] = 1000 - colortemp * 2
-            #self._attr_color_temp = int(self._max_mireds-self._state['3'] * self._miredsratio)
+            self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+            self._attr_color_temp = colortemp
             payload['3'] = 1000 - \
                 round((colortemp - self._min_mireds) / self._miredsratio)
             count += 1
@@ -440,9 +436,8 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
             payload['6'] = round(hs_color[1] * 10)
             count += 1
 
-        if count == 0 or effect is not None:
+        if count == 0:
             #autocolortemp when brightness color temp and hs_color is not set
-
             if effect is not None: 
                 self._effect = effect
             if self._effect == 'natural':
@@ -477,8 +472,72 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
                     payload['4'] = 1000
                     payload['8'] = 500
                     payload['7'] = '03000003E8FFFF007803E8FFFF00F003E8FFFF003C03E8FFFF00B403E8FFFF010E03E8FFFF002603E8FFFF'
-
-        await self.hass.async_add_executor_job(self._tcp_client.control, payload)
+        if transition: 
+            self._transitioning += 1
+            now = self._transitioning
+            if self._effect =='chrismas':
+                await self.hass.async_add_executor_job(self._tcp_client.control, payload)
+                return None
+            if brightness:
+                payloadtemp = {'1': 255, '2': 0}
+                p4i = round(originalbrightness / 255 * 1000)
+                p4f = payload['4']
+                p4steps = abs(round((p4i-p4f)/4))
+            else:
+                p4steps = 0
+            if self._attr_color_mode == COLOR_MODE_COLOR_TEMP:
+                p3i = 1000 - round((originalcolortemp - self._min_mireds) / self._miredsratio)
+                p3steps = 0
+                if '3' in payload:
+                    p3f = payload['3']
+                    p3steps = abs(round((p3i-p3f)/4))
+                steps = p3steps if p3steps > p4steps else p4steps
+                stepseconds = transition / steps
+                if steps <= 0: 
+                    return None
+                if stepseconds < 0.3:
+                    steps = round(transition / stepseconds)
+                    stepseconds = transition / steps
+                _LOGGER.info(f'steps={steps}')
+                for s in range(steps):
+                    payloadtemp['4']= round(p4i + (p4f - p4i) * s / steps)
+                    if p3steps != 0:
+                        payloadtemp['3']= round(p3i + (p3f - p3i) * s / steps)
+                    if now == self._transitioning:
+                        await self.hass.async_add_executor_job(self._tcp_client.control, payloadtemp)
+                        await asyncio.sleep(stepseconds)
+                    else:
+                        return None
+            elif  self._attr_color_mode == COLOR_MODE_HS:
+                p5i = originalhs[0]
+                p6i = originalhs[1]*10
+                p5steps = 0
+                p6steps = 0
+                if '5' in payload:
+                    p5f = payload['5']
+                    p6f = payload['6']
+                    p5steps = abs(round((p5i - p5f) / 3))
+                    p6steps = abs(round((p6i - p6f) / 10))
+                steps = max([p4steps, p5steps, p6steps])
+                stepseconds = transition / steps
+                if steps <= 0: 
+                    return None
+                if stepseconds < 0.3:
+                    steps = round(transition / stepseconds)
+                    stepseconds = transition / steps
+                _LOGGER.info(f'steps={steps}')
+                for s in range(steps):
+                    payloadtemp['4']= round(p4i + (p4f - p4i) * s / steps)
+                    if p5steps != 0: 
+                        payloadtemp['5']= round(p5i + (p5f - p5i) * s / steps)
+                        payloadtemp['6']= round(p6i + (p6f - p6i) * s / steps)
+                    if now == self._transitioning:
+                        await self.hass.async_add_executor_job(self._tcp_client.control, payloadtemp)
+                        await asyncio.sleep(stepseconds)
+                    else:
+                        return None
+        else:
+            await self.hass.async_add_executor_job(self._tcp_client.control, payload)
         # self._refresh_state()
         return None
 
@@ -526,7 +585,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
     def get_supported_features(self) -> int:
         """Flag supported features."""
         features = 0
-        features = features | SUPPORT_EFFECT
+        features = features | SUPPORT_EFFECT | SUPPORT_TRANSITION
         try:
             # Map features for better reading
             if COLOR_MODE_BRIGHTNESS in self._attr_supported_color_modes:
