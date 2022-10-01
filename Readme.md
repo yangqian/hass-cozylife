@@ -21,6 +21,8 @@ This a third-party home assistant custom components works for Cozylife Lights ba
 Tested it on [color bulbs (no homekit)](https://detail.1688.com/offer/617699711703.html?spm=a2615.2177701.autotrace-offerGeneral.1.12be5799WNMB96).
 It can be initialized though bluetooth. 
 
+It has also been tested on [color bulbs (with homekit)](https://www.aliexpress.com/item/4001365774507.html). It can run both Apple homekit and Home Assistant simultaneously.
+
 Switch and CW lights are not tested yet.
 CW lights should work.
 
