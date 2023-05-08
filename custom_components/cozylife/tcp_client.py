@@ -251,12 +251,13 @@ class tcp_client(object):
         try:
             self._connect.send(self._get_package(cmd, payload))
         except:
-            self.disconnect()
+            self._connect.send(self._get_package(cmd, payload))
             try:
+                self.disconnect()
                 self._initSocket()
                 self._connect.send(self._get_package(cmd, payload))
             except:
-                pass
+                self.disconnect()
 
     def control(self, payload: dict) -> bool:
         """

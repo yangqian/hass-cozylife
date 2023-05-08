@@ -4,9 +4,11 @@ from homeassistant.components import zeroconf
 import logging
 from .tcp_client import tcp_client
 from datetime import timedelta
+import time
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import color as colorutil
 from homeassistant.components.light import (
     PLATFORM_SCHEMA,
@@ -78,8 +80,8 @@ SWITCH_SCAN_INTERVAL = timedelta(seconds=20)
 
 CIRCADIAN_BRIGHTNESS = True
 try:
-  # I am using circadian lighting v1
-  from custom_components.circadian_lighting import CIRCADIAN_LIGHTING_UPDATE_TOPIC, DATA_CIRCADIAN_LIGHTING
+  import custom_components.circadian_lighting as cir
+  DATA_CIRCADIAN_LIGHTING=cir.DOMAIN #'circadian_lighting'
 except:
   CIRCADIAN_BRIGHTNESS = False
 
@@ -236,7 +238,7 @@ class CozyLifeSwitchAsLight(LightEntity):
         return None
 
 
-class CozyLifeLight(CozyLifeSwitchAsLight):
+class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
     # _attr_brightness: int | None = None
     # _attr_color_mode: str | None = None
     # _attr_color_temp: int | None = None
@@ -356,7 +358,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
           self._cl = self.hass.data.get(DATA_CIRCADIAN_LIGHTING)
           if self._cl == None:
             return None
-        colortemp_in_kelvin = self._cl.data['colortemp']
+        colortemp_in_kelvin = self._cl._colortemp
         autocolortemp = colorutil.color_temperature_kelvin_to_mired(
             colortemp_in_kelvin)
         return autocolortemp
@@ -365,10 +367,10 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
           self._cl = self.hass.data.get(DATA_CIRCADIAN_LIGHTING)
           if self._cl == None:
             return None
-        if self._cl.data['percent'] > 0:
+        if self._cl._percent > 0:
             return self._max_brightness
         else:
-            return round(((self._max_brightness - self._min_brightness) * ((100+self._cl.data['percent']) / 100)) + self._min_brightness)
+            return round(((self._max_brightness - self._min_brightness) * ((100+self._cl._percent) / 100)) + self._min_brightness)
 
 
     @property
@@ -410,6 +412,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
         if brightness is not None:
             # Color: mininum light brightness 12, max 1000
             # White mininum light brightness 4, max 1000
+            self._effect = 'manual'
             payload['4'] = round(brightness / 255 * 1000)
             self._attr_brightness = brightness
             count += 1
@@ -417,6 +420,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
         if colortemp is not None:
             # 0-694
             #payload['3'] = 1000 - colortemp * 2
+            self._effect = 'manual'
             self._attr_color_mode = COLOR_MODE_COLOR_TEMP
             self._attr_color_temp = colortemp
             payload['3'] = 1000 - \
@@ -472,8 +476,11 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
                     payload['4'] = 1000
                     payload['8'] = 500
                     payload['7'] = '03000003E8FFFF007803E8FFFF00F003E8FFFF003C03E8FFFF00B403E8FFFF010E03E8FFFF002603E8FFFF'
+
+        self._transitioning = 0
+
         if transition: 
-            self._transitioning += 1
+            self._transitioning = time.time()
             now = self._transitioning
             if self._effect =='chrismas':
                 await self.hass.async_add_executor_job(self._tcp_client.control, payload)
@@ -492,9 +499,9 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
                     p3f = payload['3']
                     p3steps = abs(round((p3i-p3f)/4))
                 steps = p3steps if p3steps > p4steps else p4steps
-                stepseconds = transition / steps
                 if steps <= 0: 
                     return None
+                stepseconds = transition / steps
                 if stepseconds < 0.3:
                     steps = round(transition / stepseconds)
                     stepseconds = transition / steps
@@ -519,10 +526,10 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
                     p5steps = abs(round((p5i - p5f) / 3))
                     p6steps = abs(round((p6i - p6f) / 10))
                 steps = max([p4steps, p5steps, p6steps])
-                stepseconds = transition / steps
                 if steps <= 0: 
                     return None
-                if stepseconds < 0.3:
+                stepseconds = transition / steps
+                if stepseconds < 4:
                     steps = round(transition / stepseconds)
                     stepseconds = transition / steps
                 _LOGGER.info(f'steps={steps}')
@@ -539,6 +546,12 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
         else:
             await self.hass.async_add_executor_job(self._tcp_client.control, payload)
         # self._refresh_state()
+        return None
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the entity off."""
+        self._transitioning = 0
+        await super().async_turn_off(*kwargs)
         return None
 
 
@@ -576,6 +589,22 @@ class CozyLifeLight(CozyLifeSwitchAsLight):
     @property
     def assumed_state(self):
         return True
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if not last_state:
+            return
+        if 'last_effect' in last_state.attributes:
+            self._effect = last_state.attributes['last_effect']
+
+    @property
+    def extra_state_attributes(self):
+        attributes = {}
+        attributes['last_effect'] = self._effect
+        attributes['transitioning'] = self._transitioning
+
+        return attributes
 
     @property
     def supported_features(self) -> int:
