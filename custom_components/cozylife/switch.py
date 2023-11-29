@@ -51,7 +51,7 @@ async def async_setup_platform(
 
 
     switches = []
-    for item in config.get('switches'):
+    for item in config.get('switches') or []:
         client = tcp_client(item.get('ip'))
         client._device_id = item.get('did')
         client._pid = item.get('pid')
