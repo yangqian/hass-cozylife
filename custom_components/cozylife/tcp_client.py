@@ -36,13 +36,13 @@ class tcp_client(object):
     _port = 5555
     _connect = None  # socket
 
-    _device_id = 'temp_id'  # str
+    _device_id = str  # str
     # _device_key = str
     _pid = str
-    _device_type_code = '01'
+    _device_type_code = str
     _icon = str
-    _device_model_name = 'light'
-    _dpid = [3, 5]
+    _device_model_name = str
+    _dpid = []
     # last sn
     _sn = str
 
