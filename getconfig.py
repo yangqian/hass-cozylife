@@ -38,7 +38,7 @@ for ip in probelist:
         device_info_str += f'    pid: {a._pid}\n'
         device_info_str += f'    dmn: {a._device_model_name}\n'
         device_info_str += f'    dpid: {a._dpid}\n'
-        device_info_str += f'    device_type: {a._device_type_code}\n'
+      #  device_info_str += f'    device_type: {a._device_type_code}\n'
 
         if a._device_type_code == '01':
             lights_buf.write(device_info_str)
