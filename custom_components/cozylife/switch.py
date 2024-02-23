@@ -83,7 +83,12 @@ class CozyLifeSwitch(SwitchEntity):
         self._unique_id = tcp_client.device_id
         self._name = tcp_client.device_id[-4:]
         self._refresh_state()
-    
+
+    @property
+    def unique_id(self) -> str | None:
+        """Return a unique ID."""
+        return self._unique_id
+        
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
 
