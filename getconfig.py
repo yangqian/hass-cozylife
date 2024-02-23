@@ -45,7 +45,7 @@ for ip in probelist:
         elif a._device_type_code == '00':
             switches_buf.write(device_info_str)
 
-print(f'lights:')
+print(f'light:')
 print(f'- platform: cozylife')
 print(f'  lights:')
 print(lights_buf.getvalue())
