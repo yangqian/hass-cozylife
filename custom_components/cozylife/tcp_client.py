@@ -36,13 +36,13 @@ class tcp_client(object):
     _port = 5555
     _connect = None  # socket
 
-    _device_id = str  # str
+    _device_id = 'temp_id'  # str
     # _device_key = str
     _pid = str
-    _device_type_code = str
+    _device_type_code = '01'
     _icon = str
-    _device_model_name = str
-    _dpid = []
+    _device_model_name = 'light'
+    _dpid = [3, 5]
     # last sn
     _sn = str
 
@@ -52,7 +52,7 @@ class tcp_client(object):
 
     def disconnect(self):
         if self._connect:
-            try: 
+            try:
                 #self._connect.shutdown(socket.SHUT_RDWR)
                 self._connect.close()
             except:
@@ -68,6 +68,7 @@ class tcp_client(object):
             s.settimeout(self.timeout)
             s.connect((self._ip, self._port))
             self._connect = s
+
         except:
             _LOGGER.info(f'_initSocketerror,ip={self._ip}')
             self.disconnect()
