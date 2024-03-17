@@ -56,6 +56,7 @@ async def async_setup_platform(
         client._device_id = item.get('did')
         client._pid = item.get('pid')
         client._dpid = item.get('dpid')
+        client.name = item.get('name')
         client._device_model_name = item.get('dmn')
         switches.append(CozyLifeSwitch(client, hass))
 
@@ -81,7 +82,7 @@ class CozyLifeSwitch(SwitchEntity):
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
-        self._name = tcp_client.device_id[-4:]
+        self._name = tcp_client.name or tcp_client.device_id[-4:]
         self._refresh_state()
 
     @property
