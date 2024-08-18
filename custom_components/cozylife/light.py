@@ -140,7 +140,7 @@ async def async_setup_platform(
               await light.async_turn_on(effect='natural')
             else:
               await hass.async_add_executor_job(light._refresh_state)
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
     async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
     async_add_devices(switches)
@@ -151,7 +151,7 @@ async def async_setup_platform(
     async def async_update(now=None):
         for light in switches:
             await hass.async_add_executor_job(light._refresh_state)
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
     async_track_time_interval(hass, async_update, SWITCH_SCAN_INTERVAL)
 
     platform = entity_platform.async_get_current_platform()
@@ -170,9 +170,10 @@ async def async_setup_platform(
 
 
 class CozyLifeSwitchAsLight(LightEntity):
+
     _tcp_client = None
     _attr_is_on = True
-    
+    _unrecorded_attributes = frozenset({"brightness","color_temp"})
     def __init__(self, tcp_client: tcp_client, hass) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
@@ -180,7 +181,7 @@ class CozyLifeSwitchAsLight(LightEntity):
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
         self._name = tcp_client.device_id[-4:]
-        self._refresh_state()
+        #self._refresh_state()
 
     @property
     def unique_id(self) -> str | None:
@@ -239,10 +240,12 @@ class CozyLifeSwitchAsLight(LightEntity):
 
 
 class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
-    # _attr_brightness: int | None = None
-    # _attr_color_mode: str | None = None
-    # _attr_color_temp: int | None = None
-    # _attr_hs_color = None
+    _attr_brightness: int | None = None
+    _attr_color_mode: str | None = None
+    _attr_color_temp: int | None = None
+    _attr_hs_color = None
+    _unrecorded_attributes = frozenset({"brightness","color_temp"})
+
     _tcp_client = None
 
     _attr_supported_color_modes = {
@@ -297,7 +300,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
 
 
-        self._refresh_state()
+        #self._refresh_state()
         self.SUPPORT_COZYLIGHT = self.get_supported_features()
 
     async def async_set_effect(self, effect: str):
