@@ -5,7 +5,6 @@ from .tcp_client import tcp_client
 from datetime import timedelta
 import asyncio
 
-from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
