@@ -7,7 +7,6 @@ import asyncio
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import TEMP_CELSIUS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
