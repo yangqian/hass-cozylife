@@ -31,7 +31,7 @@ from homeassistant.components.light import (
     SUPPORT_TRANSITION,
     LightEntity,
 )
-from homeassistant.const import TEMP_CELSIUS, CONF_EFFECT
+from homeassistant.const import CONF_EFFECT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
