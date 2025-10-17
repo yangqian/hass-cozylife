@@ -248,15 +248,22 @@ class tcp_client(object):
         :param payload:
         :return:
         """
+        if not self._connect:
+            self._initSocket()
+
+        if not self._connect:
+            return
+
         try:
             self._connect.send(self._get_package(cmd, payload))
-        except:
-            self._connect.send(self._get_package(cmd, payload))
+        except Exception:  # noqa: BLE001
             try:
                 self.disconnect()
                 self._initSocket()
-                self._connect.send(self._get_package(cmd, payload))
-            except:
+
+                if self._connect:
+                    self._connect.send(self._get_package(cmd, payload))
+            except Exception:  # noqa: BLE001
                 self.disconnect()
 
     def control(self, payload: dict) -> bool:
