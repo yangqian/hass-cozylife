@@ -34,7 +34,7 @@ def _coerce_ip(value: str) -> str:
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("use_custom_range", default=False): vol.Boolean(),
+        vol.Required("use_custom_range", default=False): bool,
         vol.Optional("start_ip", default=""): str,
         vol.Optional("end_ip", default=""): str,
         vol.Optional("timeout", default=0.3): vol.All(
