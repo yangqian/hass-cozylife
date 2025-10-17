@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure CozyLife",
+        "description": "Scan your network to discover CozyLife lights and switches.",
+        "data": {
+          "start_ip": "Start IP address",
+          "end_ip": "End IP address",
+          "timeout": "Connection timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_ip": "Enter a valid IPv4 address.",
+      "range_order": "The end IP must be greater than or equal to the start IP.",
+      "no_devices_found": "No CozyLife devices were discovered in this range."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Re-scan network",
+        "description": "Update the device list by scanning your network again.",
+        "data": {
+          "start_ip": "Start IP address",
+          "end_ip": "End IP address",
+          "timeout": "Connection timeout (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_ip": "Enter a valid IPv4 address.",
+      "range_order": "The end IP must be greater than or equal to the start IP.",
+      "no_devices_found": "No CozyLife devices were discovered in this range."
+    }
+  }
+}
