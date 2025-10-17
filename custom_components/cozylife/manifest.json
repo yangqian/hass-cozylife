@@ -1,6 +1,6 @@
 {
   "domain": "cozylife",
-  "name": "cozylife light",
+  "name": "CozyLife",
   "documentation": "https://github.com/yangqian/hass-cozylife",
   "config_flow": true,
   "dependencies": [],
