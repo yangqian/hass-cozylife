@@ -1,64 +1,53 @@
-"""Platform for sensor integration."""
+"""Switch platform for CozyLife devices."""
+
 from __future__ import annotations
-import logging
-from .tcp_client import tcp_client
-from datetime import timedelta
+
 import asyncio
+import logging
+from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.event import async_track_time_interval
 
-from typing import Any, Final, Literal, TypedDict, final
-from .const import (
-    DOMAIN,
-    SWITCH_TYPE_CODE,
-    LIGHT_TYPE_CODE,
-    LIGHT_DPID,
-    SWITCH,
-    WORK_MODE,
-    TEMP,
-    BRIGHT,
-    HUE,
-    SAT,
-)
-
-SCAN_INTERVAL = timedelta(seconds=20)
-
-_LOGGER = logging.getLogger(__name__)
-_LOGGER.info(__name__)
+from .const import DOMAIN
+from .tcp_client import tcp_client
 
 SCAN_INTERVAL = timedelta(seconds=240)
 
-async def async_setup_platform(
+_LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    async_add_devices: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the sensor platform."""
-    # We only want this platform to be set up via discovery.
-    # logging.info('setup_platform', hass, config, add_entities, discovery_info)
-    _LOGGER.info('setup_platform')
-    #_LOGGER.info(f'ip={hass.data[DOMAIN]}')
-    
-    #if discovery_info is None:
-    #    return
+    """Set up CozyLife switches from a config entry."""
 
+    data = hass.data[DOMAIN][entry.entry_id]
+    devices = data["devices"]
+    switches: list[CozyLifeSwitch] = []
 
-    switches = []
-    for item in config.get('switches') or []:
-        client = tcp_client(item.get('ip'))
-        client._device_id = item.get('did')
-        client._pid = item.get('pid')
-        client._dpid = item.get('dpid')
-        client.name = item.get('name')
-        client._device_model_name = item.get('dmn')
+    timeout = entry.data["timeout"]
+
+    for item in devices.get("switches", []):
+        client = tcp_client(item.get("ip"), timeout=timeout)
+        client._device_id = item.get("did")
+        client._pid = item.get("pid")
+        client._dpid = item.get("dpid")
+        client.name = item.get("name")
+        client._device_model_name = item.get("dmn")
         switches.append(CozyLifeSwitch(client, hass))
 
-    async_add_devices(switches)
+    if not switches:
+        return
+
+    async_add_entities(switches)
+
     for switch in switches:
         await hass.async_add_executor_job(switch._tcp_client._initSocket)
         await asyncio.sleep(0.01)
@@ -67,7 +56,28 @@ async def async_setup_platform(
         for switch in switches:
             await hass.async_add_executor_job(switch._refresh_state)
             await asyncio.sleep(0.01)
-    async_track_time_interval(hass, async_update, SCAN_INTERVAL)
+
+    remove_update = async_track_time_interval(hass, async_update, SCAN_INTERVAL)
+
+    data.setdefault("switch_runtime", {})
+    data["switch_runtime"].update(
+        {
+            "switches": switches,
+            "remove_update": remove_update,
+        }
+    )
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload CozyLife switch entities for a config entry."""
+
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    runtime = data.get("switch_runtime", {})
+
+    if remove := runtime.get("remove_update"):
+        remove()
+
+    return True
 
 
 class CozyLifeSwitch(SwitchEntity):

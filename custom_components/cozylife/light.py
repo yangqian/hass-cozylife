@@ -1,15 +1,16 @@
-"""Platform for sensor integration."""
-from __future__ import annotations
-from homeassistant.components import zeroconf
-import logging
-from .tcp_client import tcp_client
-from datetime import timedelta
-import time
+"""Light platform for CozyLife devices."""
 
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.util import color as colorutil
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from datetime import timedelta
+from typing import Any
+
+import voluptuous as vol
+
 from homeassistant.components.light import (
-    PLATFORM_SCHEMA,
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP,
     ATTR_EFFECT,
@@ -26,142 +27,149 @@ from homeassistant.components.light import (
     COLOR_MODE_UNKNOWN,
     FLASH_LONG,
     FLASH_SHORT,
+    SUPPORT_BRIGHTNESS,
     SUPPORT_EFFECT,
     SUPPORT_FLASH,
     SUPPORT_TRANSITION,
     LightEntity,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EFFECT
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from typing import Any, Final, Literal, TypedDict, final
-from .const import (
-    DOMAIN,
-    SWITCH_TYPE_CODE,
-    LIGHT_TYPE_CODE,
-    LIGHT_DPID,
-    SWITCH,
-    WORK_MODE,
-    TEMP,
-    BRIGHT,
-    HUE,
-    SAT,
-)
-
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util import color as colorutil
 
-import asyncio
-
-import voluptuous as vol
-import homeassistant.helpers.config_validation as cv
-
-LIGHT_SCHEMA = vol.Schema({
-    vol.Required('ip'): cv.string,
-    vol.Required('did'): cv.string,
-    vol.Optional('dmn', default='Smart Bulb Light'): cv.string,
-    vol.Optional('pid', default='p93sfg'): cv.string,
-    vol.Optional('dpid', default=[1, 2, 3, 4, 5, 7, 8, 9, 13, 14]):
-        vol.All(cv.ensure_list, [int])
-})
-
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional('lights', default=[]):
-        vol.All(cv.ensure_list, [LIGHT_SCHEMA])
-})
+from .const import DOMAIN
+from .tcp_client import tcp_client
 
 
 SCAN_INTERVAL = timedelta(seconds=60)
 SWITCH_SCAN_INTERVAL = timedelta(seconds=20)
-MIN_INTERVAL=0.2
+MIN_INTERVAL = 0.2
 
 CIRCADIAN_BRIGHTNESS = True
 try:
-  import custom_components.circadian_lighting as cir
-  DATA_CIRCADIAN_LIGHTING=cir.DOMAIN #'circadian_lighting'
-except:
-  CIRCADIAN_BRIGHTNESS = False
+    import custom_components.circadian_lighting as cir
+
+    DATA_CIRCADIAN_LIGHTING = cir.DOMAIN  # 'circadian_lighting'
+except Exception:  # noqa: BLE001
+    CIRCADIAN_BRIGHTNESS = False
 
 _LOGGER = logging.getLogger(__name__)
-_LOGGER.info(__name__)
 
 SERVICE_SET_EFFECT = "set_effect"
 SERVICE_SET_ALL_EFFECT = "set_all_effect"
-scenes = ['manual','natural','sleep','warm','study','chrismas']
+SCENES = ["manual", "natural", "sleep", "warm", "study", "chrismas"]
 SERVICE_SCHEMA_SET_ALL_EFFECT = {
-vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in scenes])
+    vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in SCENES])
 }
 SERVICE_SCHEMA_SET_EFFECT = {
-vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in scenes])
+    vol.Required(CONF_EFFECT): vol.In([mode.lower() for mode in SCENES])
 }
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    async_add_devices: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the sensor platform."""
-    # We only want this platform to be set up via discovery.
-    _LOGGER.info(
-        f'setup_platform.hass={hass},config={config},async_add_entities={async_add_devices},discovery_info={discovery_info}')
-    # zc = await zeroconf.async_get_instance(hass)
-    # _LOGGER.info(f'zc={zc}')
-    #_LOGGER.info(f'hass.data={hass.data[DOMAIN]}')
-    #_LOGGER.info(f'discovery_info={discovery_info}')
-    #if discovery_info is None:
-    #    return
+    """Set up CozyLife lights from a config entry."""
 
-    lights = []
-    # treat switch as light in home assistant
-    switches = []
-    for item in config.get('lights'):
-        client = tcp_client(item.get('ip'))
-        client._device_id = item.get('did')
-        client._pid = item.get('pid')
-        client._dpid = item.get('dpid')
-        client._device_model_name = item.get('dmn')
-        if 'switch' not in client._device_model_name.lower():
-          lights.append(CozyLifeLight(client, hass, scenes))
+    data = hass.data[DOMAIN][entry.entry_id]
+    devices = data["devices"]
+    lights: list[CozyLifeLight] = []
+    switches: list[CozyLifeSwitchAsLight] = []
+
+    timeout = entry.data["timeout"]
+
+    for item in devices.get("lights", []):
+        client = tcp_client(item.get("ip"), timeout=timeout)
+        client._device_id = item.get("did")
+        client._pid = item.get("pid")
+        client._dpid = item.get("dpid")
+        client._device_model_name = item.get("dmn")
+        if "switch" not in client._device_model_name.lower():
+            lights.append(CozyLifeLight(client, hass, SCENES))
         else:
-          switches.append(CozyLifeSwitchAsLight(client, hass))
+            switches.append(CozyLifeSwitchAsLight(client, hass))
 
-    async_add_devices(lights)
-    for light in lights:
-        await hass.async_add_executor_job(light._tcp_client._initSocket)
+    if not lights and not switches:
+        return
+
+    async_add_entities(lights + switches)
+
+    for entity in [*lights, *switches]:
+        await hass.async_add_executor_job(entity._tcp_client._initSocket)
         await asyncio.sleep(0.01)
 
-    async def async_update(now=None):
+    async def async_update_lights(now=None):
         for light in lights:
-            if light._attr_is_on and light._effect ==  'natural':
-              await light.async_turn_on(effect='natural')
+            if light._attr_is_on and light._effect == "natural":
+                await light.async_turn_on(effect="natural")
             else:
-              await hass.async_add_executor_job(light._refresh_state)
+                await hass.async_add_executor_job(light._refresh_state)
             await asyncio.sleep(0.1)
-    async_track_time_interval(hass, async_update, SCAN_INTERVAL)
 
-    async_add_devices(switches)
-    for light in switches:
-        await hass.async_add_executor_job(light._tcp_client._initSocket)
-        await asyncio.sleep(0.01)
-
-    async def async_update(now=None):
+    async def async_update_switches(now=None):
         for light in switches:
             await hass.async_add_executor_job(light._refresh_state)
             await asyncio.sleep(0.1)
-    async_track_time_interval(hass, async_update, SWITCH_SCAN_INTERVAL)
+
+    remove_light_update = async_track_time_interval(
+        hass, async_update_lights, SCAN_INTERVAL
+    )
+    remove_switch_update = async_track_time_interval(
+        hass, async_update_switches, SWITCH_SCAN_INTERVAL
+    )
+
+    data.setdefault("light_runtime", {})
+    data["light_runtime"].update(
+        {
+            "lights": lights,
+            "switches": switches,
+            "remove_lights": remove_light_update,
+            "remove_switches": remove_switch_update,
+        }
+    )
 
     platform = entity_platform.async_get_current_platform()
-
     platform.async_register_entity_service(
         SERVICE_SET_EFFECT, SERVICE_SCHEMA_SET_EFFECT, "async_set_effect"
     )
-    async def async_set_all_effect(call:ServiceCall):
-        for light in lights:
-            await light.async_set_effect(call.data.get(ATTR_EFFECT))
-            await asyncio.sleep(0.01)
-    hass.services.async_register(DOMAIN, SERVICE_SET_ALL_EFFECT, async_set_all_effect)
+
+    if lights:
+        async def async_set_all_effect(call: ServiceCall) -> None:
+            for light in lights:
+                await light.async_set_effect(call.data.get(ATTR_EFFECT))
+                await asyncio.sleep(0.01)
+
+        if hass.services.has_service(DOMAIN, SERVICE_SET_ALL_EFFECT):
+            hass.services.async_remove(DOMAIN, SERVICE_SET_ALL_EFFECT)
+
+        hass.services.async_register(
+            DOMAIN, SERVICE_SET_ALL_EFFECT, async_set_all_effect
+        )
+        data["light_runtime"]["remove_service"] = lambda: hass.services.async_remove(
+            DOMAIN, SERVICE_SET_ALL_EFFECT
+        )
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload CozyLife light entities for a config entry."""
+
+    data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    runtime = data.get("light_runtime", {})
+
+    if remove := runtime.get("remove_lights"):
+        remove()
+    if remove := runtime.get("remove_switches"):
+        remove()
+    if remove_service := runtime.get("remove_service"):
+        remove_service()
+
+    return True
 
 
 

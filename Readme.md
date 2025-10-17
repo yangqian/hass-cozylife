@@ -26,41 +26,27 @@ It has also been tested on [color bulbs (with homekit)](https://www.aliexpress.c
 Switch and CW lights are not tested yet.
 CW lights should work.
 
+## Setup
+
+The integration now supports Home Assistant's config flow so you no longer need to edit `configuration.yaml` or run the standalone `getconfig.py` script. After installing the custom component:
+
+1. Open **Settings → Devices & Services** in Home Assistant.
+2. Click **Add Integration** and search for **CozyLife**.
+3. Provide the start and end IP addresses of the range you want to scan (for example, the DHCP range used by your bulbs) and optionally adjust the TCP timeout.
+4. The onboarding flow will probe the devices directly from Home Assistant and create a config entry containing all discovered lights and switches.
+
+The device list can be refreshed at any time from the integration's options menu, where the same scan form is available. YAML configuration is no longer supported and the discovery workflow now happens entirely inside Home Assistant.
+
 ## How I Setup the bulb
 
-The bulb will phone home to dohome.doiting.com. I blocked the dns request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete. 
-But the app could transmit the wifi name and password to the bulb. 
+The bulb will phone home to dohome.doiting.com. I blocked the dns request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete.
+But the app could transmit the wifi name and password to the bulb.
 In principle, if you complete the full registration with the cloud, the bulb will respond to UDP discovery.
 However, my bulbs does not respond to UDP discovery, not sure if is because the code I used was buggy.
 
-Instead, we run a TCP scan on the operating port 5555 through a specific ip range.
+Instead, the integration performs a TCP scan on the operating port 5555 across the IP range you specify during configuration.
 
-Note that for we must have persistent IP address otherwise the config will change. Thus can be done on most routers.
-
-### Sample config
-
-Run the following getconfig.py with two parameters ip start and ip end.
-```
-python3 getconfig.py 192.168.1.193 192.168.1.194
-```
-to obtain something like
-```
-light:
-- platform: cozylife
-  lights:
-  - ip: 192.168.1.193
-    did: 637929887cb94c4cffff
-    pid: p93sfg
-    dmn: Smart Bulb Light
-    dpid: [1, 2, 3, 4, 5, 7, 8, 9, 13, 14]
-  - ip: 192.168.1.194
-    did: 637929887cb94c4ceeee
-    pid: p93sfg
-    dmn: Smart Bulb Light
-    dpid: [1, 2, 3, 4, 5, 7, 8, 9, 13, 14]
-```
-
-Copy it to the relevant configuration file (yaml). Here the did is the same as of the official app (unique id). pid, dmn, dpid are also the same as the official app.
+Note that we must have persistent IP addresses otherwise the config will change. This can be done on most routers.
 
 ### Optional requirements
 
