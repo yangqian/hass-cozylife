@@ -35,19 +35,19 @@ The integration now supports Home Assistant's config flow so you no longer need 
 
 1. Open **Settings → Devices & Services** in Home Assistant.
 2. Click **Add Integration** and search for **CozyLife**.
-3. Provide the start and end IP addresses of the range you want to scan (for example, the DHCP range used by your bulbs) and optionally adjust the TCP timeout.
+3. Start the scan. By default the integration will automatically probe every active local subnet that Home Assistant can detect. Enable the **Use custom IP range** option if you need to target a different block of addresses and provide the start and end IPs plus an optional TCP timeout.
 4. The onboarding flow will probe the devices directly from Home Assistant and create a config entry containing all discovered lights and switches.
 
 The device list can be refreshed at any time from the integration's options menu, where the same scan form is available. YAML configuration is no longer supported and the discovery workflow now happens entirely inside Home Assistant.
 
 ## How I set up the bulb
 
-The bulb will phone home to dohome.doiting.com. I blocked the dns request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete.
+The bulb will phone home to dohome.doiting.com. I blocked the DNS request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete.
 But the app could transmit the wifi name and password to the bulb.
 In principle, if you complete the full registration with the cloud, the bulb will respond to UDP discovery.
-However, my bulbs does not respond to UDP discovery, not sure if is because the code I used was buggy.
+However, my bulbs do not respond to UDP discovery, not sure if is because the code I used was buggy.
 
-Instead, the integration performs a TCP scan on the operating port 5555 across the IP range you specify during configuration.
+Instead, the integration performs a TCP scan on the operating port 5555 across the IP range you specify during configuration. If you want to ensure the devices remain local-only, block outbound traffic for the bulbs at your router or firewall in addition to using the integration's automatic local discovery.
 
 Note that we must have persistent IP addresses otherwise the config will change. This can be done on most routers.
 
