@@ -16,14 +16,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up CozyLife from a config entry."""
 
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {
-        "devices": entry.data["devices"],
-        "scan_settings": {
-            "start_ip": entry.data["start_ip"],
-            "end_ip": entry.data["end_ip"],
-            "timeout": entry.data["timeout"],
-        },
-    }
+    entry_data: dict[str, object]
+
+    if "devices" in entry.data:
+        # Legacy configuration where a single entry represented a full scan.
+        entry_data = {
+            "devices": entry.data["devices"],
+            "timeout": entry.data.get("timeout", 0.3),
+            "scan_settings": {
+                "start_ip": entry.data.get("start_ip"),
+                "end_ip": entry.data.get("end_ip"),
+                "timeout": entry.data.get("timeout", 0.3),
+            },
+        }
+    else:
+        device_info = dict(entry.data.get("device", {}))
+        timeout = entry.data.get("timeout", 0.3)
+        entry_data = {
+            "device": device_info,
+            "timeout": timeout,
+            "name": entry.data.get("name"),
+            "location": entry.data.get("location"),
+        }
+
+    hass.data[DOMAIN][entry.entry_id] = entry_data
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

@@ -52,9 +52,9 @@ def discover_devices(start_ip: str, end_ip: str, timeout: float = 0.3) -> dict[s
             }
 
             if client._device_type_code == LIGHT_TYPE_CODE:
-                lights.append(device_data)
+                lights.append({**device_data, "type": "light"})
             elif client._device_type_code == SWITCH_TYPE_CODE:
-                switches.append(device_data)
+                switches.append({**device_data, "type": "switch"})
 
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Error discovering CozyLife device at %s: %s", address, err)
