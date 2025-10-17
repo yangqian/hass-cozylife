@@ -1,22 +1,25 @@
-# hass-cozylife
+# Cozylife integration for Home Assistant
 
-## What is it
+> Maintained by [Polaralias](https://github.com/Polaralias).
 
-This a third-party home assistant custom components works for Cozylife Lights based on [the official repository](https://github.com/cozylife/hass_cozylife_local_pull). The official repo is buggy in too many ways. This one heavily modified. 
+## Overview
 
-* It is a pure local version and does not use UDP discovery.
+This custom integration adds native support for Cozylife smart lights and switches in Home Assistant. It builds on top of [the original Cozylife project](https://github.com/cozylife/hass_cozylife_local_pull) but contains numerous fixes and enhancements that make the local-only experience more reliable.
 
-* The color temperature is fixed.
-
-
-## features
-
-* heartbeat to each bulb in a fix time interval to test the availability. Even if the bulb is not available during the time of setup or later, it can pick it up if the bulb goes online again.
-* async
-* fixed the color temperature
+* Pure local control with TCP discovery instead of UDP broadcast.
+* Periodic heartbeats to keep device availability up to date.
+* Asynchronous implementation to keep Home Assistant responsive.
+* Fixed color-temperature handling to avoid crashes when switching modes.
 
 
-## Tested Product 
+## Features
+
+* Heartbeat each bulb at a fixed interval to monitor availability. Even if a bulb is offline during onboarding, it will be picked up once it comes back online.
+* Async I/O everywhere for a smoother Home Assistant experience.
+* Color temperature handling is clamped to supported values to prevent unexpected errors when switching between white and color modes.
+
+
+## Tested hardware
 
 Tested it on [color bulbs (no homekit)](https://detail.1688.com/offer/617699711703.html?spm=a2615.2177701.autotrace-offerGeneral.1.12be5799WNMB96).
 It can be initialized though bluetooth. 
@@ -26,7 +29,7 @@ It has also been tested on [color bulbs (with homekit)](https://www.aliexpress.c
 Switch and CW lights are not tested yet.
 CW lights should work.
 
-## Setup
+## Installation & setup
 
 The integration now supports Home Assistant's config flow so you no longer need to edit `configuration.yaml` or run the standalone `getconfig.py` script. After installing the custom component:
 
@@ -37,7 +40,7 @@ The integration now supports Home Assistant's config flow so you no longer need 
 
 The device list can be refreshed at any time from the integration's options menu, where the same scan form is available. YAML configuration is no longer supported and the discovery workflow now happens entirely inside Home Assistant.
 
-## How I Setup the bulb
+## How I set up the bulb
 
 The bulb will phone home to dohome.doiting.com. I blocked the dns request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete.
 But the app could transmit the wifi name and password to the bulb.
