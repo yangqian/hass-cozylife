@@ -27,8 +27,8 @@ def _coerce_ip(value: str) -> str:
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("start_ip"): _coerce_ip,
-        vol.Required("end_ip"): _coerce_ip,
+        vol.Required("start_ip"): str,
+        vol.Required("end_ip"): str,
         vol.Optional("timeout", default=0.3): vol.All(
             vol.Coerce(float), vol.Range(min=0.05, max=10.0)
         ),
@@ -49,17 +49,23 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            start_ip = user_input.get("start_ip", "")
+            end_ip = user_input.get("end_ip", "")
+
             try:
-                start_ip = _coerce_ip(user_input["start_ip"])
-                end_ip = _coerce_ip(user_input["end_ip"])
-            except vol.Invalid as err:
-                field = err.path[0] if err.path else "start_ip"
-                errors[str(field)] = err.error_message
-            else:
-                if int(ipaddress.ip_address(start_ip)) > int(
-                    ipaddress.ip_address(end_ip)
-                ):
-                    errors["end_ip"] = "range_order"
+                start_ip = _coerce_ip(start_ip)
+            except vol.Invalid:
+                errors["start_ip"] = "invalid_ip"
+
+            try:
+                end_ip = _coerce_ip(end_ip)
+            except vol.Invalid:
+                errors["end_ip"] = "invalid_ip"
+
+            if not errors and int(ipaddress.ip_address(start_ip)) > int(
+                ipaddress.ip_address(end_ip)
+            ):
+                errors["end_ip"] = "range_order"
 
             if not errors:
                 await self.async_set_unique_id(DOMAIN)
@@ -115,17 +121,23 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            start_ip = user_input.get("start_ip", "")
+            end_ip = user_input.get("end_ip", "")
+
             try:
-                start_ip = _coerce_ip(user_input["start_ip"])
-                end_ip = _coerce_ip(user_input["end_ip"])
-            except vol.Invalid as err:
-                field = err.path[0] if err.path else "start_ip"
-                errors[str(field)] = err.error_message
-            else:
-                if int(ipaddress.ip_address(start_ip)) > int(
-                    ipaddress.ip_address(end_ip)
-                ):
-                    errors["end_ip"] = "range_order"
+                start_ip = _coerce_ip(start_ip)
+            except vol.Invalid:
+                errors["start_ip"] = "invalid_ip"
+
+            try:
+                end_ip = _coerce_ip(end_ip)
+            except vol.Invalid:
+                errors["end_ip"] = "invalid_ip"
+
+            if not errors and int(ipaddress.ip_address(start_ip)) > int(
+                ipaddress.ip_address(end_ip)
+            ):
+                errors["end_ip"] = "range_order"
 
             if not errors:
                 timeout = float(user_input["timeout"])
