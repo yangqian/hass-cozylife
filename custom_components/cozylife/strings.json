@@ -1,38 +1,55 @@
 {
   "config": {
+    "abort": {
+      "no_devices_found": "No CozyLife devices were discovered in this range."
+    },
     "step": {
       "user": {
         "title": "Configure CozyLife",
-        "description": "Scan your network to discover CozyLife lights and switches.",
+        "description": "Scan your network to discover CozyLife lights and switches. By default the integration searches the range from {start} to {end}.",
         "data": {
           "start_ip": "Start IP address",
           "end_ip": "End IP address",
           "timeout": "Connection timeout (seconds)"
+        }
+      },
+      "device": {
+        "title": "Select device",
+        "description": "Choose a discovered device and optionally provide a name and location for Home Assistant.",
+        "data": {
+          "device": "Device",
+          "name": "Device name",
+          "location": "Device location"
         }
       }
     },
     "error": {
       "invalid_ip": "Enter a valid IPv4 address.",
       "range_order": "The end IP must be greater than or equal to the start IP.",
-      "no_devices_found": "No CozyLife devices were discovered in this range."
+      "no_devices_found": "No CozyLife devices were discovered in this range.",
+      "device_missing": "Select a device from the list.",
+      "already_configured": "This device is already configured.",
+      "invalid_timeout": "Enter a timeout between 0.05 and 10 seconds."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Re-scan network",
-        "description": "Update the device list by scanning your network again.",
+        "title": "Update CozyLife device",
+        "description": "Adjust the stored connection details or update the friendly name and location.",
         "data": {
-          "start_ip": "Start IP address",
-          "end_ip": "End IP address",
-          "timeout": "Connection timeout (seconds)"
+          "ip": "Device IP address",
+          "timeout": "Connection timeout (seconds)",
+          "name": "Device name",
+          "location": "Device location"
         }
       }
     },
     "error": {
       "invalid_ip": "Enter a valid IPv4 address.",
       "range_order": "The end IP must be greater than or equal to the start IP.",
-      "no_devices_found": "No CozyLife devices were discovered in this range."
+      "no_devices_found": "No CozyLife devices were discovered in this range.",
+      "invalid_timeout": "Enter a timeout between 0.05 and 10 seconds."
     }
   }
 }

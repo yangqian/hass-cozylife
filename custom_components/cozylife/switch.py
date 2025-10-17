@@ -10,10 +10,11 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import DOMAIN
+from .const import DOMAIN, MANUFACTURER
 from .tcp_client import tcp_client
 
 SCAN_INTERVAL = timedelta(seconds=240)
@@ -29,19 +30,41 @@ async def async_setup_entry(
     """Set up CozyLife switches from a config entry."""
 
     data = hass.data[DOMAIN][entry.entry_id]
-    devices = data["devices"]
     switches: list[CozyLifeSwitch] = []
 
-    timeout = entry.data["timeout"]
+    timeout = data.get("timeout", entry.data.get("timeout", 0.3))
 
-    for item in devices.get("switches", []):
-        client = tcp_client(item.get("ip"), timeout=timeout)
-        client._device_id = item.get("did")
-        client._pid = item.get("pid")
-        client._dpid = item.get("dpid")
-        client.name = item.get("name")
-        client._device_model_name = item.get("dmn")
-        switches.append(CozyLifeSwitch(client, hass))
+    if device := data.get("device"):
+        if device.get("type") == "switch":
+            client = tcp_client(device.get("ip"), timeout=timeout)
+            client._device_id = device.get("did")
+            client._pid = device.get("pid")
+            client._dpid = device.get("dpid")
+            client._device_model_name = device.get("dmn")
+            fallback_name = client._device_model_name or (
+                client.device_id[-4:] if client.device_id else "CozyLife"
+            )
+            friendly_name = data.get("name") or fallback_name
+            location = data.get("location")
+            client.name = friendly_name
+            switches.append(
+                CozyLifeSwitch(
+                    client,
+                    hass,
+                    name=friendly_name,
+                    location=location,
+                )
+            )
+    else:
+        devices = data.get("devices", {})
+        for item in devices.get("switches", []):
+            client = tcp_client(item.get("ip"), timeout=timeout)
+            client._device_id = item.get("did")
+            client._pid = item.get("pid")
+            client._dpid = item.get("dpid")
+            client.name = item.get("name")
+            client._device_model_name = item.get("dmn")
+            switches.append(CozyLifeSwitch(client, hass))
 
     if not switches:
         return
@@ -83,14 +106,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class CozyLifeSwitch(SwitchEntity):
     _tcp_client = None
     _attr_is_on = True
-    
-    def __init__(self, tcp_client: tcp_client, hass) -> None:
+
+    def __init__(
+        self,
+        tcp_client: tcp_client,
+        hass,
+        *,
+        name: str | None = None,
+        location: str | None = None,
+    ) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
-        self._name = tcp_client.name or tcp_client.device_id[-4:]
+        self._name = name or tcp_client.name or tcp_client.device_id[-4:]
+        self._suggested_area = location or None
+        self._device_info = DeviceInfo(
+            identifiers={(DOMAIN, tcp_client.device_id)},
+            manufacturer=MANUFACTURER,
+            model=tcp_client._device_model_name,
+            name=self._name,
+        )
+        self._device_info["name"] = self._name
+        if self._suggested_area:
+            self._device_info["suggested_area"] = self._suggested_area
         self._refresh_state()
 
     @property
@@ -109,7 +149,11 @@ class CozyLifeSwitch(SwitchEntity):
     
     @property
     def name(self) -> str:
-        return 'cozylife:' + self._name
+        return self._name
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return self._device_info
     
     @property
     def available(self) -> bool:

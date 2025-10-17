@@ -1,4 +1,5 @@
 DOMAIN = "cozylife"
+MANUFACTURER = "CozyLife"
 
 # http://doc.doit/project-5/doc-8/
 SWITCH_TYPE_CODE = '00'

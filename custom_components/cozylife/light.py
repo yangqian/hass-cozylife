@@ -37,12 +37,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EFFECT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_platform
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import color as colorutil
 
-from .const import DOMAIN
+from .const import DOMAIN, MANUFACTURER
 from .tcp_client import tcp_client
 
 
@@ -78,22 +79,60 @@ async def async_setup_entry(
     """Set up CozyLife lights from a config entry."""
 
     data = hass.data[DOMAIN][entry.entry_id]
-    devices = data["devices"]
     lights: list[CozyLifeLight] = []
     switches: list[CozyLifeSwitchAsLight] = []
 
-    timeout = entry.data["timeout"]
+    timeout = data.get("timeout", entry.data.get("timeout", 0.3))
 
-    for item in devices.get("lights", []):
-        client = tcp_client(item.get("ip"), timeout=timeout)
-        client._device_id = item.get("did")
-        client._pid = item.get("pid")
-        client._dpid = item.get("dpid")
-        client._device_model_name = item.get("dmn")
-        if "switch" not in client._device_model_name.lower():
-            lights.append(CozyLifeLight(client, hass, SCENES))
-        else:
-            switches.append(CozyLifeSwitchAsLight(client, hass))
+    if device := data.get("device"):
+        client = tcp_client(device.get("ip"), timeout=timeout)
+        client._device_id = device.get("did")
+        client._pid = device.get("pid")
+        client._dpid = device.get("dpid")
+        client._device_model_name = device.get("dmn")
+        fallback_name = client._device_model_name or (
+            client.device_id[-4:] if client.device_id else "CozyLife"
+        )
+        friendly_name = data.get("name") or fallback_name
+        location = data.get("location")
+        client.name = friendly_name
+
+        if device.get("type") == "light" and (
+            not client._device_model_name
+            or "switch" not in client._device_model_name.lower()
+        ):
+            lights.append(
+                CozyLifeLight(
+                    client,
+                    hass,
+                    SCENES,
+                    name=friendly_name,
+                    location=location,
+                )
+            )
+        elif device.get("type") == "switch" or (
+            client._device_model_name and "switch" in client._device_model_name.lower()
+        ):
+            switches.append(
+                CozyLifeSwitchAsLight(
+                    client,
+                    hass,
+                    name=friendly_name,
+                    location=location,
+                )
+            )
+    else:
+        devices = data.get("devices", {})
+        for item in devices.get("lights", []):
+            client = tcp_client(item.get("ip"), timeout=timeout)
+            client._device_id = item.get("did")
+            client._pid = item.get("pid")
+            client._dpid = item.get("dpid")
+            client._device_model_name = item.get("dmn")
+            if "switch" not in client._device_model_name.lower():
+                lights.append(CozyLifeLight(client, hass, SCENES))
+            else:
+                switches.append(CozyLifeSwitchAsLight(client, hass))
 
     if not lights and not switches:
         return
@@ -180,13 +219,31 @@ class CozyLifeSwitchAsLight(LightEntity):
     _tcp_client = None
     _attr_is_on = True
     _unrecorded_attributes = frozenset({"brightness","color_temp"})
-    def __init__(self, tcp_client: tcp_client, hass) -> None:
+
+    def __init__(
+        self,
+        tcp_client: tcp_client,
+        hass,
+        *,
+        name: str | None = None,
+        location: str | None = None,
+    ) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
-        self._name = tcp_client.device_id[-4:]
+        self._name = name or tcp_client.device_id[-4:]
+        self._suggested_area = location or None
+        self._device_info = DeviceInfo(
+            identifiers={(DOMAIN, tcp_client.device_id)},
+            manufacturer=MANUFACTURER,
+            model=tcp_client._device_model_name,
+            name=self._name,
+        )
+        self._device_info["name"] = self._name
+        if self._suggested_area:
+            self._device_info["suggested_area"] = self._suggested_area
         #self._refresh_state()
 
     @property
@@ -205,7 +262,11 @@ class CozyLifeSwitchAsLight(LightEntity):
     
     @property
     def name(self) -> str:
-        return 'cozylife:' + self._name
+        return self._name
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return self._device_info
     
     @property
     def available(self) -> bool:
@@ -258,9 +319,18 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
         COLOR_MODE_ONOFF}
     _attr_color_mode = COLOR_MODE_BRIGHTNESS
 
-    def __init__(self, tcp_client: tcp_client, hass, scenes) -> None:
+    def __init__(
+        self,
+        tcp_client: tcp_client,
+        hass,
+        scenes,
+        *,
+        name: str | None = None,
+        location: str | None = None,
+    ) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
+        super().__init__(tcp_client, hass, name=name, location=location)
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
@@ -275,7 +345,9 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
         #self._name = tcp_client._device_model_name
         _LOGGER.info(f'before:{self._unique_id}._attr_color_mode={self._attr_color_mode}._attr_supported_color_modes='
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
-        self._name = tcp_client.device_id[-4:]
+        if not name:
+            self._name = tcp_client.device_id[-4:]
+            self._device_info["name"] = self._name
         self._min_mireds = colorutil.color_temperature_kelvin_to_mired(6500)
         self._max_mireds = colorutil.color_temperature_kelvin_to_mired(2700)
         self._miredsratio = (self._max_mireds - self._min_mireds)/1000
