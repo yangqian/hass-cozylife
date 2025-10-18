@@ -14,6 +14,7 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import network, selector
+from homeassistant.helpers.translation import async_get_translations
 
 from .const import CONF_AREA, DOMAIN
 from .helpers import (
@@ -40,16 +41,6 @@ def _coerce_ip(value: str) -> str:
 
 TIMEOUT_VALIDATOR = vol.All(vol.Coerce(float), vol.Range(min=0.05, max=10.0))
 
-LEGACY_RANGE_SCHEMA = vol.Schema(
-    {
-        vol.Required("start_ip", default=DEFAULT_START_IP): str,
-        vol.Required("end_ip", default=DEFAULT_END_IP): str,
-        vol.Optional("timeout", default=0.3): vol.All(
-            vol.Coerce(float), vol.Range(min=0.05, max=10.0)
-        ),
-    }
-)
-
 class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the CozyLife config flow."""
 
@@ -59,6 +50,47 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovered_devices: list[dict[str, Any]] = []
         self._scan_settings: dict[str, Any] = {}
         self._auto_scan_ranges: list[tuple[str, str]] = []
+        self._device_type_labels: dict[str, str] | None = None
+
+    async def _async_get_device_type_labels(self) -> dict[str, str]:
+        """Return translated labels for device types."""
+
+        if self._device_type_labels is not None:
+            return self._device_type_labels
+
+        language = self.hass.config.language or "en"
+        translations = await async_get_translations(
+            self.hass, language, "component", {DOMAIN}
+        )
+
+        prefix = f"component.{DOMAIN}.config.labels.device_type."
+        labels = {
+            "light": translations.get(f"{prefix}light", "Light"),
+            "switch": translations.get(f"{prefix}switch", "Switch"),
+            "unknown": translations.get(f"{prefix}unknown", "Device"),
+        }
+
+        self._device_type_labels = labels
+        return labels
+
+    def _build_ip_selector(self) -> selector.TextSelector:
+        """Return a text selector configured for IP input."""
+
+        return selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        )
+
+    def _build_timeout_selector(self) -> selector.NumberSelector:
+        """Return a number selector for timeouts."""
+
+        return selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.05,
+                max=10.0,
+                step=0.05,
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        )
 
     async def _async_get_auto_scan_ranges(self) -> list[tuple[str, str]]:
         """Return the automatically detected scan ranges for the host network."""
@@ -284,18 +316,20 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Construct the dynamic schema for the user step."""
 
         schema_fields: dict[Any, Any] = {
-            vol.Required("use_custom_range", default=use_custom_range): bool,
+            vol.Required("use_custom_range", default=use_custom_range): selector.BooleanSelector(),
         }
 
         if show_manual_fields:
             schema_fields.update(
                 {
-                    vol.Required("start_ip", default=suggested_start): str,
-                    vol.Required("end_ip", default=suggested_end): str,
+                    vol.Required("start_ip", default=suggested_start): self._build_ip_selector(),
+                    vol.Required("end_ip", default=suggested_end): self._build_ip_selector(),
                 }
             )
 
-        schema_fields[vol.Required("timeout", default=suggested_timeout)] = TIMEOUT_VALIDATOR
+        schema_fields[vol.Required("timeout", default=suggested_timeout)] = (
+            self._build_timeout_selector()
+        )
 
         return vol.Schema(schema_fields)
 
@@ -309,10 +343,7 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not self._discovered_devices:
             return self.async_abort(reason="no_devices_found")
 
-        type_labels = {
-            "light": "Light",
-            "switch": "Switch",
-        }
+        type_labels = await self._async_get_device_type_labels()
 
         device_choices: dict[str, str] = {}
         device_options: list[selector.SelectOptionDict] = []
@@ -320,9 +351,9 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_id = device["did"]
             label_type = type_labels.get(
                 device.get("type"),
-                (device.get("type") or "device").replace("_", " ").title(),
+                type_labels["unknown"],
             )
-            model = device.get("dmn") or "Unknown"
+            model = device.get("dmn") or type_labels["unknown"]
             label = f"{label_type}: {model} ({device['ip']})"
             device_choices[device_id] = label
             device_options.append(
@@ -480,8 +511,8 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
 
         options_schema = vol.Schema(
             {
-                vol.Required("ip", default=suggested_ip): str,
-                vol.Required("timeout", default=suggested_timeout): vol.Coerce(float),
+                vol.Required("ip", default=suggested_ip): self._build_ip_selector(),
+                vol.Required("timeout", default=suggested_timeout): self._build_timeout_selector(),
                 vol.Optional(CONF_NAME, default=suggested_name or ""): selector.TextSelector(),
                 vol.Optional(CONF_AREA, default=suggested_area): selector.AreaSelector(),
             }
@@ -501,6 +532,8 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
         """Handle options for legacy search-based entries."""
 
         errors: dict[str, str] = {}
+        timeout_selector = self._build_timeout_selector()
+        ip_selector = self._build_ip_selector()
 
         if user_input is not None:
             start_ip = user_input.get("start_ip", "")
@@ -552,10 +585,16 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
             "timeout": current.get("timeout", 0.3),
         }
 
+        legacy_schema = vol.Schema(
+            {
+                vol.Required("start_ip", default=suggested["start_ip"]): ip_selector,
+                vol.Required("end_ip", default=suggested["end_ip"]): ip_selector,
+                vol.Optional("timeout", default=suggested["timeout"]): timeout_selector,
+            }
+        )
+
         return self.async_show_form(
             step_id="init",
-            data_schema=self.add_suggested_values_to_schema(
-                LEGACY_RANGE_SCHEMA, suggested
-            ),
+            data_schema=legacy_schema,
             errors=errors,
         )
