@@ -6,7 +6,7 @@
     "step": {
       "user": {
         "title": "Configure CozyLife",
-        "description": "Scan your network to discover CozyLife lights and switches. The integration automatically scans every active local subnet ({auto}). Enable the custom range option if you need to probe a different set of addresses.",
+        "description": "Scan your network to discover CozyLife lights and switches. Discovery sends {protocol} across each detected local subnet ({auto}). Use the manual range toggle to probe a custom IP span (default {default_range}).",
         "data": {
           "use_custom_range": "Use custom IP range",
           "start_ip": "Start IP address",
@@ -29,6 +29,7 @@
       "range_order": "The end IP must be greater than or equal to the start IP.",
       "no_devices_found": "No CozyLife devices were discovered in this range.",
       "no_networks_found": "Home Assistant could not determine which local networks to scan.",
+      "manual_range_required": "Enter a start and end IP address to run a manual scan.",
       "device_missing": "Select a device from the list.",
       "already_configured": "This device is already configured.",
       "invalid_timeout": "Enter a timeout between 0.05 and 10 seconds."
