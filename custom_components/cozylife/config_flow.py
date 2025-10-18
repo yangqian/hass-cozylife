@@ -10,9 +10,10 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_AREA, CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import network
+from homeassistant.helpers import network, selector
 
 from .const import DOMAIN
 from .discovery import discover_devices
@@ -218,10 +219,21 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ranges": ranges_to_scan,
                         "timeout": timeout,
                     }
-                    self._discovered_devices = [
-                        *discovered["lights"],
-                        *discovered["switches"],
-                    ]
+                    unique_devices: dict[str, dict[str, Any]] = {
+                        item["did"]: item
+                        for item in [
+                            *discovered["lights"],
+                            *discovered["switches"],
+                        ]
+                    }
+                    self._discovered_devices = sorted(
+                        unique_devices.values(),
+                        key=lambda item: (
+                            item.get("type", ""),
+                            item.get("dmn") or "",
+                            item.get("ip") or "",
+                        ),
+                    )
                     return await self.async_step_device()
 
         description_default_start = (
@@ -304,12 +316,25 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not self._discovered_devices:
             return self.async_abort(reason="no_devices_found")
 
+        type_labels = {
+            "light": "Light",
+            "switch": "Switch",
+        }
+
         device_choices: dict[str, str] = {}
+        device_options: list[selector.SelectOptionDict] = []
         for device in self._discovered_devices:
-            label_type = device.get("type", "device").capitalize()
+            device_id = device["did"]
+            label_type = type_labels.get(
+                device.get("type"),
+                (device.get("type") or "device").replace("_", " ").title(),
+            )
             model = device.get("dmn") or "Unknown"
             label = f"{label_type}: {model} ({device['ip']})"
-            device_choices[device["did"]] = label
+            device_choices[device_id] = label
+            device_options.append(
+                selector.SelectOptionDict(value=device_id, label=label)
+            )
 
         if user_input is not None:
             selected = user_input.get("device")
@@ -325,16 +350,18 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         item for item in self._discovered_devices if item["did"] == selected
                     )
 
-                    name_input = (user_input.get("name") or "").strip()
-                    location_input = (user_input.get("location") or "").strip()
+                    name_input = (user_input.get(CONF_NAME) or "").strip()
+                    area_input = user_input.get(CONF_AREA)
+                    if isinstance(area_input, str):
+                        area_input = area_input.strip() or None
 
                     title = name_input or device.get("dmn") or device["did"]
 
                     data = {
                         "device": device,
                         "timeout": self._scan_settings["timeout"],
-                        "name": name_input or None,
-                        "location": location_input or None,
+                        CONF_NAME: name_input or None,
+                        CONF_AREA: area_input or None,
                     }
 
                     await self.async_set_unique_id(device["did"])
@@ -343,11 +370,18 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_create_entry(title=title, data=data)
 
         if user_input is not None:
-            suggested_name = user_input.get("name", "")
-            suggested_location = user_input.get("location", "")
+            suggested_name = user_input.get(CONF_NAME, "")
+            suggested_area = user_input.get(CONF_AREA)
         else:
             suggested_name = ""
-            suggested_location = ""
+            suggested_area = None
+
+        device_selector = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=device_options,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
 
         device_field = vol.Required("device")
         if len(device_choices) == 1:
@@ -356,9 +390,9 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                device_field: vol.In(device_choices),
-                vol.Optional("name", default=suggested_name): str,
-                vol.Optional("location", default=suggested_location): str,
+                device_field: device_selector,
+                vol.Optional(CONF_NAME, default=suggested_name): selector.TextSelector(),
+                vol.Optional(CONF_AREA, default=suggested_area): selector.AreaSelector(),
             }
         )
 
@@ -399,8 +433,10 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             ip_value = user_input.get("ip", "")
             timeout_value = user_input.get("timeout")
-            name_value = (user_input.get("name") or "").strip()
-            location_value = (user_input.get("location") or "").strip()
+            name_value = (user_input.get(CONF_NAME) or "").strip()
+            area_value = user_input.get(CONF_AREA)
+            if isinstance(area_value, str):
+                area_value = area_value.strip() or None
 
             try:
                 ip_value = _coerce_ip(ip_value)
@@ -421,9 +457,14 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
                     **data,
                     "device": updated_device,
                     "timeout": timeout_value,
-                    "name": name_value or None,
-                    "location": location_value or None,
+                    CONF_NAME: name_value or None,
+                    CONF_AREA: area_value or None,
                 }
+
+                if "location" in updated_data:
+                    updated_data.pop("location", None)
+                if "name" in updated_data and CONF_NAME in updated_data:
+                    updated_data.pop("name", None)
 
                 self.hass.config_entries.async_update_entry(
                     self.config_entry, data=updated_data
@@ -433,8 +474,13 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
                 )
                 return self.async_create_entry(title="", data={})
 
-        suggested_name = data.get("name") or device.get("dmn") or device.get("did")
-        suggested_location = data.get("location") or ""
+        suggested_name = (
+            data.get(CONF_NAME)
+            or data.get("name")
+            or device.get("dmn")
+            or device.get("did")
+        )
+        suggested_area = data.get(CONF_AREA) or data.get("location") or None
         suggested_ip = device.get("ip", "")
         suggested_timeout = data.get("timeout", 0.3)
 
@@ -442,8 +488,8 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required("ip", default=suggested_ip): str,
                 vol.Required("timeout", default=suggested_timeout): vol.Coerce(float),
-                vol.Optional("name", default=suggested_name or ""): str,
-                vol.Optional("location", default=suggested_location): str,
+                vol.Optional(CONF_NAME, default=suggested_name or ""): selector.TextSelector(),
+                vol.Optional(CONF_AREA, default=suggested_area): selector.AreaSelector(),
             }
         )
 

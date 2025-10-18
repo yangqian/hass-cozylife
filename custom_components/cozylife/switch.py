@@ -9,7 +9,9 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_AREA, CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
@@ -44,15 +46,19 @@ async def async_setup_entry(
             fallback_name = client._device_model_name or (
                 client.device_id[-4:] if client.device_id else "CozyLife"
             )
-            friendly_name = data.get("name") or fallback_name
-            location = data.get("location")
+            friendly_name = (
+                data.get(CONF_NAME)
+                or data.get("name")
+                or fallback_name
+            )
+            area_id = data.get(CONF_AREA) or data.get("location")
             client.name = friendly_name
             switches.append(
                 CozyLifeSwitch(
                     client,
                     hass,
                     name=friendly_name,
-                    location=location,
+                    area_id=area_id,
                 )
             )
     else:
@@ -113,7 +119,7 @@ class CozyLifeSwitch(SwitchEntity):
         hass,
         *,
         name: str | None = None,
-        location: str | None = None,
+        area_id: str | None = None,
     ) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
@@ -121,7 +127,7 @@ class CozyLifeSwitch(SwitchEntity):
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
         self._name = name or tcp_client.name or tcp_client.device_id[-4:]
-        self._suggested_area = location or None
+        self._area_id = area_id or None
         self._device_info = DeviceInfo(
             identifiers={(DOMAIN, tcp_client.device_id)},
             manufacturer=MANUFACTURER,
@@ -129,14 +135,25 @@ class CozyLifeSwitch(SwitchEntity):
             name=self._name,
         )
         self._device_info["name"] = self._name
-        if self._suggested_area:
-            self._device_info["suggested_area"] = self._suggested_area
+        if self._area_id:
+            self._device_info["suggested_area"] = self._area_id
+        self._attr_name = self._name
+        self._attr_suggested_area = None
         self._refresh_state()
 
     @property
     def unique_id(self) -> str | None:
         """Return a unique ID."""
         return self._unique_id
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self._area_id:
+            area_registry = ar.async_get(self.hass)
+            area = area_registry.async_get_area(self._area_id)
+            suggested_area = area.name if area else self._area_id
+            self._device_info["suggested_area"] = suggested_area
+            self._attr_suggested_area = suggested_area
         
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)

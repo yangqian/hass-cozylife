@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import CONF_AREA, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -32,11 +32,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         device_info = dict(entry.data.get("device", {}))
         timeout = entry.data.get("timeout", 0.3)
+        name_value = entry.data.get(CONF_NAME)
+        if name_value is None:
+            name_value = entry.data.get("name")
+
+        area = entry.data.get(CONF_AREA)
+        if area is None:
+            area = entry.data.get("location")
+
         entry_data = {
             "device": device_info,
             "timeout": timeout,
-            "name": entry.data.get("name"),
-            "location": entry.data.get("location"),
+            CONF_NAME: name_value,
+            CONF_AREA: area,
         }
 
     hass.data[DOMAIN][entry.entry_id] = entry_data
