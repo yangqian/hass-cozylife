@@ -32,16 +32,7 @@ def _coerce_ip(value: str) -> str:
         raise vol.Invalid("invalid_ip") from err
 
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("use_custom_range", default=False): bool,
-        vol.Optional("start_ip", default=""): str,
-        vol.Optional("end_ip", default=""): str,
-        vol.Optional("timeout", default=0.3): vol.All(
-            vol.Coerce(float), vol.Range(min=0.05, max=10.0)
-        ),
-    }
-)
+TIMEOUT_VALIDATOR = vol.All(vol.Coerce(float), vol.Range(min=0.05, max=10.0))
 
 LEGACY_RANGE_SCHEMA = vol.Schema(
     {
@@ -121,9 +112,47 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         auto_ranges = await self._async_get_auto_scan_ranges()
 
+        if user_input is None and not auto_ranges:
+            # Default to manual mode if Home Assistant cannot determine
+            # any automatic ranges to scan.
+            user_input = {"use_custom_range": True}
+
+        suggested_start = (
+            user_input.get("start_ip")
+            if user_input and "start_ip" in user_input
+            else auto_ranges[0][0] if auto_ranges else DEFAULT_START_IP
+        )
+        suggested_end = (
+            user_input.get("end_ip")
+            if user_input and "end_ip" in user_input
+            else auto_ranges[0][1] if auto_ranges else DEFAULT_END_IP
+        )
+        suggested_timeout = (
+            user_input.get("timeout")
+            if user_input and "timeout" in user_input
+            else 0.3
+        )
+
+        use_custom_range = bool(user_input and user_input.get("use_custom_range"))
+        if (
+            not use_custom_range
+            and user_input is not None
+            and (user_input.get("start_ip") or user_input.get("end_ip"))
+        ):
+            # Treat manual IP input as opting into custom mode even if the
+            # toggle was not explicitly enabled.
+            use_custom_range = True
+
+        show_manual_fields = use_custom_range or not auto_ranges
+
         if user_input is not None:
-            use_custom_range = user_input.get("use_custom_range", False)
-            timeout = float(user_input.get("timeout", 0.3))
+            try:
+                timeout = TIMEOUT_VALIDATOR(user_input.get("timeout", 0.3))
+            except vol.Invalid:
+                errors["timeout"] = "invalid_timeout"
+                timeout = 0.3
+            else:
+                suggested_timeout = timeout
 
             ranges_to_scan: list[tuple[str, str]] = []
 
@@ -131,23 +160,26 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 start_ip = user_input.get("start_ip", "")
                 end_ip = user_input.get("end_ip", "")
 
-                try:
-                    start_ip = _coerce_ip(start_ip)
-                except vol.Invalid:
-                    errors["start_ip"] = "invalid_ip"
+                if not start_ip or not end_ip:
+                    errors["base"] = "manual_range_required"
+                else:
+                    try:
+                        start_ip = _coerce_ip(start_ip)
+                    except vol.Invalid:
+                        errors["start_ip"] = "invalid_ip"
 
-                try:
-                    end_ip = _coerce_ip(end_ip)
-                except vol.Invalid:
-                    errors["end_ip"] = "invalid_ip"
+                    try:
+                        end_ip = _coerce_ip(end_ip)
+                    except vol.Invalid:
+                        errors["end_ip"] = "invalid_ip"
 
-                if not errors and int(ipaddress.ip_address(start_ip)) > int(
-                    ipaddress.ip_address(end_ip)
-                ):
-                    errors["end_ip"] = "range_order"
+                    if not errors and int(ipaddress.ip_address(start_ip)) > int(
+                        ipaddress.ip_address(end_ip)
+                    ):
+                        errors["end_ip"] = "range_order"
 
-                if not errors:
-                    ranges_to_scan = [(start_ip, end_ip)]
+                    if not errors:
+                        ranges_to_scan = [(start_ip, end_ip)]
             else:
                 if not auto_ranges:
                     errors["base"] = "no_networks_found"
@@ -192,25 +224,75 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ]
                     return await self.async_step_device()
 
+        description_default_start = (
+            suggested_start
+            if suggested_start
+            else auto_ranges[0][0] if auto_ranges else DEFAULT_START_IP
+        )
+        description_default_end = (
+            suggested_end
+            if suggested_end
+            else auto_ranges[0][1] if auto_ranges else DEFAULT_END_IP
+        )
+
         if auto_ranges:
             placeholders = {
                 "auto": ", ".join(
                     f"{start} – {end}" for start, end in auto_ranges
-                )
+                ),
+                "protocol": "a TCP probe on port 5555",
+                "default_range": f"{description_default_start} – {description_default_end}",
             }
         else:
             placeholders = {
-                "auto": f"{DEFAULT_START_IP} – {DEFAULT_END_IP}"
+                "auto": f"{DEFAULT_START_IP} – {DEFAULT_END_IP}",
+                "protocol": "a TCP probe on port 5555",
+                "default_range": f"{description_default_start} – {description_default_end}",
             }
+
+        schema = self._build_user_schema(
+            show_manual_fields,
+            suggested_start,
+            suggested_end,
+            suggested_timeout,
+            use_custom_range,
+        )
 
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
-                STEP_USER_DATA_SCHEMA, user_input or {}
+                schema,
+                user_input or {},
             ),
             errors=errors,
             description_placeholders=placeholders,
         )
+
+    @staticmethod
+    def _build_user_schema(
+        show_manual_fields: bool,
+        suggested_start: str,
+        suggested_end: str,
+        suggested_timeout: float,
+        use_custom_range: bool,
+    ) -> vol.Schema:
+        """Construct the dynamic schema for the user step."""
+
+        schema_fields: dict[Any, Any] = {
+            vol.Required("use_custom_range", default=use_custom_range): bool,
+        }
+
+        if show_manual_fields:
+            schema_fields.update(
+                {
+                    vol.Required("start_ip", default=suggested_start): str,
+                    vol.Required("end_ip", default=suggested_end): str,
+                }
+            )
+
+        schema_fields[vol.Required("timeout", default=suggested_timeout)] = TIMEOUT_VALIDATOR
+
+        return vol.Schema(schema_fields)
 
     async def async_step_device(
         self, user_input: Mapping[str, Any] | None = None
