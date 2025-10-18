@@ -40,6 +40,10 @@ The integration now supports Home Assistant's config flow so you no longer need 
 
 The device list can be refreshed at any time from the integration's options menu, where the same scan form is available. YAML configuration is no longer supported and the discovery workflow now happens entirely inside Home Assistant.
 
+### Automatic HACS metadata updates
+
+The repository contains an automated workflow that keeps the version metadata used by HACS in sync with the latest changes on the `main` branch. Every time new code is pushed, the workflow stamps a new timestamp-based version into both `custom_components/cozylife/manifest.json` and `hacs.json`, ensuring that HACS users are notified about updates without requiring manual version bumps.
+
 ## How I set up the bulb
 
 The bulb will phone home to dohome.doiting.com. I blocked the DNS request (you might also be able to block the internet access entirely, have not tested). This makes the registration process half complete.
