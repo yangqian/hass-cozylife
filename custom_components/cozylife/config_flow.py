@@ -110,22 +110,22 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         errors: dict[str, str] = {}
 
-        auto_ranges = await self._async_get_auto_scan_ranges()
-
-        if user_input is None and not auto_ranges:
-            # Default to manual mode if Home Assistant cannot determine
-            # any automatic ranges to scan.
-            user_input = {"use_custom_range": True}
+        detected_auto_ranges = await self._async_get_auto_scan_ranges()
+        effective_auto_ranges = (
+            detected_auto_ranges
+            if detected_auto_ranges
+            else [(DEFAULT_START_IP, DEFAULT_END_IP)]
+        )
 
         suggested_start = (
             user_input.get("start_ip")
             if user_input and "start_ip" in user_input
-            else auto_ranges[0][0] if auto_ranges else DEFAULT_START_IP
+            else effective_auto_ranges[0][0]
         )
         suggested_end = (
             user_input.get("end_ip")
             if user_input and "end_ip" in user_input
-            else auto_ranges[0][1] if auto_ranges else DEFAULT_END_IP
+            else effective_auto_ranges[0][1]
         )
         suggested_timeout = (
             user_input.get("timeout")
@@ -143,7 +143,7 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # toggle was not explicitly enabled.
             use_custom_range = True
 
-        show_manual_fields = use_custom_range or not auto_ranges
+        show_manual_fields = use_custom_range
 
         if user_input is not None:
             try:
@@ -181,10 +181,7 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if not errors:
                         ranges_to_scan = [(start_ip, end_ip)]
             else:
-                if not auto_ranges:
-                    errors["base"] = "no_networks_found"
-                else:
-                    ranges_to_scan = auto_ranges
+                ranges_to_scan = effective_auto_ranges
 
             if not errors and ranges_to_scan:
                 discovered: dict[str, list[dict[str, Any]]] = {
@@ -225,30 +222,21 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return await self.async_step_device()
 
         description_default_start = (
-            suggested_start
-            if suggested_start
-            else auto_ranges[0][0] if auto_ranges else DEFAULT_START_IP
+            suggested_start if suggested_start else effective_auto_ranges[0][0]
         )
         description_default_end = (
-            suggested_end
-            if suggested_end
-            else auto_ranges[0][1] if auto_ranges else DEFAULT_END_IP
+            suggested_end if suggested_end else effective_auto_ranges[0][1]
         )
 
-        if auto_ranges:
-            placeholders = {
-                "auto": ", ".join(
-                    f"{start} – {end}" for start, end in auto_ranges
-                ),
-                "protocol": "a TCP probe on port 5555",
-                "default_range": f"{description_default_start} – {description_default_end}",
-            }
-        else:
-            placeholders = {
-                "auto": f"{DEFAULT_START_IP} – {DEFAULT_END_IP}",
-                "protocol": "a TCP probe on port 5555",
-                "default_range": f"{description_default_start} – {description_default_end}",
-            }
+        placeholders = {
+            "auto": ", ".join(
+                f"{start} – {end}" for start, end in detected_auto_ranges
+            )
+            if detected_auto_ranges
+            else f"{DEFAULT_START_IP} – {DEFAULT_END_IP}",
+            "protocol": "a TCP probe on port 5555",
+            "default_range": f"{description_default_start} – {description_default_end}",
+        }
 
         schema = self._build_user_schema(
             show_manual_fields,
