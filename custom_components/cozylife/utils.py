@@ -1,9 +1,12 @@
 import json
 import time
-import requests
 import logging
+from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
+
+MODEL_PATH = Path(__file__).with_name('model.json')
+
 
 def get_sn() -> str:
     """
@@ -25,30 +28,29 @@ def get_pid_list(lang='en') -> list:
     if len(_CACHE_PID) != 0:
         return _CACHE_PID
 
-    domain = 'api-us.doiting.com'
-    protocol = 'http'
-    url_prefix = protocol + '://' + domain
     try:
-        res = requests.get(url_prefix + '/api/device_product/model', params={'lang': lang}, timeout=3)
-        res.raise_for_status()  # Raise an HTTPError for bad responses
-    except requests.exceptions.RequestException as e:
-        _LOGGER.error(f'Error making API request: {e}')
+        raw = MODEL_PATH.read_text(encoding='utf-8')
+    except FileNotFoundError:
+        _LOGGER.error('Local device model cache not found: %s', MODEL_PATH)
+        return []
+    except OSError as err:
+        _LOGGER.error('Unable to read local device model cache %s: %s', MODEL_PATH, err)
         return []
 
     try:
-        pid_list = res.json()
-    except json.JSONDecodeError as e:
-        _LOGGER.error(f'Error decoding JSON response: {e}')
+        pid_list = json.loads(raw)
+    except json.JSONDecodeError as err:
+        _LOGGER.error('Error decoding local device model cache %s: %s', MODEL_PATH, err)
         return []
 
-    if pid_list.get('ret') is None or pid_list['ret'] != '1':
-        _LOGGER.info('get_pid_list.result is not as expected')
+    if isinstance(pid_list, dict):
+        info = pid_list.get('info')
+        if isinstance(info, dict):
+            pid_list = info.get('list')
+
+    if not isinstance(pid_list, list):
+        _LOGGER.info('Local device model cache structure is not as expected')
         return []
 
-    info = pid_list.get('info')
-    if info is None or not isinstance(info, dict) or info.get('list') is None or not isinstance(info['list'], list):
-        _LOGGER.info('get_pid_list.result structure is not as expected')
-        return []
-
-    _CACHE_PID = info['list']
+    _CACHE_PID = pid_list
     return _CACHE_PID
