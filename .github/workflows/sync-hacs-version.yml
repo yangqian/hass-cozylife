@@ -1,0 +1,35 @@
+name: Sync HACS metadata version
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  update-version:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Determine version number
+        id: version
+        run: |
+          VERSION=$(date -u +"%Y.%m.%d.%H%M")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Sync manifest and hacs.json versions
+        run: |
+          python .github/scripts/update_versions.py "${{ steps.version.outputs.version }}"
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: bump HACS metadata version to ${{ steps.version.outputs.version }}"
+          commit_user_name: CozyLife Automation
+          commit_user_email: actions@github.com
