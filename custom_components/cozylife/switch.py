@@ -9,14 +9,15 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_AREA, CONF_NAME
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import DOMAIN, MANUFACTURER
+from .const import CONF_AREA, DOMAIN, MANUFACTURER
+from .helpers import normalize_area_value, resolve_area_id
 from .tcp_client import tcp_client
 
 SCAN_INTERVAL = timedelta(seconds=240)
@@ -51,7 +52,8 @@ async def async_setup_entry(
                 or data.get("name")
                 or fallback_name
             )
-            area_id = data.get(CONF_AREA) or data.get("location")
+            raw_area = data.get(CONF_AREA) or data.get("location")
+            area_id = resolve_area_id(hass, raw_area) or normalize_area_value(raw_area)
             client.name = friendly_name
             switches.append(
                 CozyLifeSwitch(
