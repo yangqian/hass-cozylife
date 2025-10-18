@@ -41,7 +41,30 @@ def _coerce_ip(value: str) -> str:
 
 TIMEOUT_VALIDATOR = vol.All(vol.Coerce(float), vol.Range(min=0.05, max=10.0))
 
-class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class CozyLifeFlowSelectors:
+    """Provide shared selector builders for CozyLife flows."""
+
+    def _build_ip_selector(self) -> selector.TextSelector:
+        """Return a text selector configured for IP input."""
+
+        return selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        )
+
+    def _build_timeout_selector(self) -> selector.NumberSelector:
+        """Return a number selector for timeouts."""
+
+        return selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.05,
+                max=10.0,
+                step=0.05,
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        )
+
+
+class CozyLifeConfigFlow(CozyLifeFlowSelectors, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the CozyLife config flow."""
 
     VERSION = 1
@@ -72,25 +95,6 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self._device_type_labels = labels
         return labels
-
-    def _build_ip_selector(self) -> selector.TextSelector:
-        """Return a text selector configured for IP input."""
-
-        return selector.TextSelector(
-            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-        )
-
-    def _build_timeout_selector(self) -> selector.NumberSelector:
-        """Return a number selector for timeouts."""
-
-        return selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.05,
-                max=10.0,
-                step=0.05,
-                mode=selector.NumberSelectorMode.BOX,
-            )
-        )
 
     async def _async_get_auto_scan_ranges(self) -> list[tuple[str, str]]:
         """Return the automatically detected scan ranges for the host network."""
@@ -305,8 +309,8 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=placeholders,
         )
 
-    @staticmethod
     def _build_user_schema(
+        self,
         show_manual_fields: bool,
         suggested_start: str,
         suggested_end: str,
@@ -434,7 +438,7 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return CozyLifeOptionsFlow(config_entry)
 
 
-class CozyLifeOptionsFlow(config_entries.OptionsFlow):
+class CozyLifeOptionsFlow(CozyLifeFlowSelectors, config_entries.OptionsFlow):
     """Handle options for the CozyLife integration."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
