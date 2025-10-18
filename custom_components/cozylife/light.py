@@ -34,7 +34,7 @@ from homeassistant.components.light import (
     LightEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_AREA, CONF_EFFECT, CONF_NAME
+from homeassistant.const import CONF_EFFECT, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import area_registry as ar
@@ -44,7 +44,8 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import color as colorutil
 
-from .const import DOMAIN, MANUFACTURER
+from .const import CONF_AREA, DOMAIN, MANUFACTURER
+from .helpers import normalize_area_value, resolve_area_id
 from .tcp_client import tcp_client
 
 
@@ -99,7 +100,8 @@ async def async_setup_entry(
             or data.get("name")
             or fallback_name
         )
-        area_id = data.get(CONF_AREA) or data.get("location")
+        raw_area = data.get(CONF_AREA) or data.get("location")
+        area_id = resolve_area_id(hass, raw_area) or normalize_area_value(raw_area)
         client.name = friendly_name
 
         if device.get("type") == "light" and (

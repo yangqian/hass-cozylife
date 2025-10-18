@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_AREA, CONF_NAME, Platform
+from homeassistant.const import CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import CONF_AREA, DOMAIN
+from .helpers import normalize_area_value, prepare_area_value_for_storage
 
 
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH]
@@ -40,6 +41,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if area is None:
             area = entry.data.get("location")
 
+        area = prepare_area_value_for_storage(hass, area)
+
         entry_data = {
             "device": device_info,
             "timeout": timeout,
@@ -67,5 +70,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle migration of config entries."""
 
-    # No migrations defined yet.
+    data = dict(entry.data)
+    updated = False
+
+    stored_area = normalize_area_value(data.get(CONF_AREA))
+    location_value = normalize_area_value(data.get("location"))
+
+    candidate_area = stored_area or location_value
+    normalized_area = prepare_area_value_for_storage(hass, candidate_area)
+
+    if normalized_area is not None:
+        if data.get(CONF_AREA) != normalized_area:
+            data[CONF_AREA] = normalized_area
+            updated = True
+    elif CONF_AREA in data:
+        data.pop(CONF_AREA)
+        updated = True
+
+    if updated:
+        hass.config_entries.async_update_entry(entry, data=data)
+
     return True

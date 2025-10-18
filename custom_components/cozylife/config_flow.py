@@ -10,12 +10,17 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_AREA, CONF_NAME
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import network, selector
 
-from .const import DOMAIN
+from .const import CONF_AREA, DOMAIN
+from .helpers import (
+    normalize_area_value,
+    prepare_area_value_for_storage,
+    resolve_area_id,
+)
 from .discovery import discover_devices
 
 DEFAULT_START_IP = "192.168.0.0"
@@ -339,9 +344,9 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
 
                     name_input = (user_input.get(CONF_NAME) or "").strip()
-                    area_input = user_input.get(CONF_AREA)
-                    if isinstance(area_input, str):
-                        area_input = area_input.strip() or None
+                    area_input = prepare_area_value_for_storage(
+                        self.hass, user_input.get(CONF_AREA)
+                    )
 
                     title = name_input or device.get("dmn") or device["did"]
 
@@ -359,7 +364,7 @@ class CozyLifeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             suggested_name = user_input.get(CONF_NAME, "")
-            suggested_area = user_input.get(CONF_AREA)
+            suggested_area = normalize_area_value(user_input.get(CONF_AREA))
         else:
             suggested_name = ""
             suggested_area = None
@@ -422,9 +427,9 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
             ip_value = user_input.get("ip", "")
             timeout_value = user_input.get("timeout")
             name_value = (user_input.get(CONF_NAME) or "").strip()
-            area_value = user_input.get(CONF_AREA)
-            if isinstance(area_value, str):
-                area_value = area_value.strip() or None
+            area_value = prepare_area_value_for_storage(
+                self.hass, user_input.get(CONF_AREA)
+            )
 
             try:
                 ip_value = _coerce_ip(ip_value)
@@ -468,7 +473,8 @@ class CozyLifeOptionsFlow(config_entries.OptionsFlow):
             or device.get("dmn")
             or device.get("did")
         )
-        suggested_area = data.get(CONF_AREA) or data.get("location") or None
+        raw_area = data.get(CONF_AREA) or data.get("location") or None
+        suggested_area = resolve_area_id(self.hass, raw_area)
         suggested_ip = device.get("ip", "")
         suggested_timeout = data.get("timeout", 0.3)
 

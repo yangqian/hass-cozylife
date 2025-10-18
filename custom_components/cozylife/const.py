@@ -1,6 +1,8 @@
 DOMAIN = "cozylife"
 MANUFACTURER = "CozyLife"
 
+CONF_AREA = "area"
+
 # http://doc.doit/project-5/doc-8/
 SWITCH_TYPE_CODE = '00'
 LIGHT_TYPE_CODE = '01'
