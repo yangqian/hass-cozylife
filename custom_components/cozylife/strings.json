@@ -16,11 +16,11 @@
       },
       "device": {
         "title": "Select device",
-        "description": "Choose a discovered device and optionally provide a name and location for Home Assistant.",
+        "description": "Choose a discovered device and optionally provide a name and area for Home Assistant.",
         "data": {
           "device": "Device",
           "name": "Device name",
-          "location": "Device location"
+          "area": "Device area"
         }
       }
     },
@@ -39,12 +39,12 @@
     "step": {
       "init": {
         "title": "Update CozyLife device",
-        "description": "Adjust the stored connection details or update the friendly name and location.",
+        "description": "Adjust the stored connection details or update the friendly name and area.",
         "data": {
           "ip": "Device IP address",
           "timeout": "Connection timeout (seconds)",
           "name": "Device name",
-          "location": "Device location"
+          "area": "Device area"
         }
       }
     },
