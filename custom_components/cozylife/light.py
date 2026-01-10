@@ -28,6 +28,9 @@ from homeassistant.components.light import (
     FLASH_SHORT,
     SUPPORT_EFFECT,
     SUPPORT_FLASH,
+    SUPPORT_COLOR,
+    SUPPORT_BRIGHTNESS,
+    SUPPORT_COLOR_TEMP,
     SUPPORT_TRANSITION,
     LightEntity,
 )
