@@ -48,6 +48,8 @@ from .const import (
     BRIGHT,
     HUE,
     SAT,
+    DEFAULT_MIN_KELVIN,
+    DEFAULT_MAX_KELVIN,
 )
 
 from homeassistant.helpers.event import async_track_time_interval
@@ -268,10 +270,17 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
         _LOGGER.info(f'before:{self._unique_id}._attr_color_mode={self._attr_color_mode}._attr_supported_color_modes='
                      f'{self._attr_supported_color_modes}.dpid={tcp_client.dpid}')
         self._name = tcp_client.device_id[-4:]
-        self._min_mireds = colorutil.color_temperature_kelvin_to_mired(6500)
-        self._max_mireds = colorutil.color_temperature_kelvin_to_mired(2700)
+        # Report kelvin bounds to Home Assistant (min = warmest, max = coldest)
+        self._attr_min_color_temp_kelvin = DEFAULT_MIN_KELVIN
+        self._attr_max_color_temp_kelvin = DEFAULT_MAX_KELVIN
+
+        # Compute mired bounds from kelvin bounds for backwards compatibility
+        # min_mireds corresponds to highest kelvin (coldest)
+        self._min_mireds = colorutil.color_temperature_kelvin_to_mired(self._attr_max_color_temp_kelvin)
+        # max_mireds corresponds to lowest kelvin (warmest)
+        self._max_mireds = colorutil.color_temperature_kelvin_to_mired(self._attr_min_color_temp_kelvin)
         self._miredsratio = (self._max_mireds - self._min_mireds)/1000
-        self._attr_color_temp = 153
+        self._attr_color_temp = int(self._min_mireds)
         self._attr_hs_color = (0, 0)
         self._transitioning = 0
         self._attr_is_on = False

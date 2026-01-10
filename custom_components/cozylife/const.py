@@ -15,3 +15,7 @@ SAT = '6'
 
 LIGHT_DPID = [SWITCH, WORK_MODE, TEMP, BRIGHT, HUE, SAT]
 SWITCH_DPID = [SWITCH, ]
+
+# Default color temperature bounds (Kelvin)
+DEFAULT_MIN_KELVIN = 2700
+DEFAULT_MAX_KELVIN = 6500
