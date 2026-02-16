@@ -589,13 +589,17 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
         originalbrightness=self._attr_brightness
         if self._effect == 'natural' and transition is None:
             transition = 5
-        if transition: 
+        if transition:
             self._transitioning = time.time()
             now = self._transitioning
             payloadtemp = {'1': 255, '2': 0}
             p4i = round(originalbrightness / 255 * 1000)
             p4f = 0
             steps = abs(round((p4i-p4f)/4))
+            if steps <= 0:
+                self._transitioning = 0
+                await super().async_turn_off()
+                return None
             stepseconds = transition / steps
             if stepseconds < MIN_INTERVAL:
                 stepseconds = MIN_INTERVAL
