@@ -1,5 +1,5 @@
 {
-    "name": "Cozylife",
-    "domains": ["light", "switch"],
-    "homeassistant": "2021.12.0"
-  }
+  "name": "Cozylife",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}
