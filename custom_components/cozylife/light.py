@@ -86,21 +86,33 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up CozyLife light from a config entry."""
-    client = hass.data[DOMAIN][entry.entry_id]
-    data = entry.data
+    """Set up CozyLife lights from a hub config entry."""
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    clients = entry_data["clients"]
+    devices = entry_data["devices"]
 
-    if 'switch' not in data.get("dmn", "").lower():
-        entity = CozyLifeLight(client, hass, scenes)
-    else:
-        entity = CozyLifeSwitchAsLight(client, hass)
+    entities = []
+    for dev in devices:
+        device_type = dev.get(CONF_DEVICE_TYPE_CODE, LIGHT_TYPE_CODE)
+        if device_type != LIGHT_TYPE_CODE:
+            continue
+        client = clients.get(dev["did"])
+        if client is None:
+            continue
+        if 'switch' not in dev.get("dmn", "").lower():
+            entity = CozyLifeLight(client, hass, scenes)
+        else:
+            entity = CozyLifeSwitchAsLight(client, hass)
+        entities.append(entity)
 
-    async_add_entities([entity])
+    if entities:
+        async_add_entities(entities)
 
     # Register light entities for set_all_effect service
-    if isinstance(entity, CozyLifeLight):
-        hass.data[DOMAIN].setdefault("light_entities", [])
-        hass.data[DOMAIN]["light_entities"].append(entity)
+    hass.data[DOMAIN].setdefault("light_entities", [])
+    for entity in entities:
+        if isinstance(entity, CozyLifeLight):
+            hass.data[DOMAIN]["light_entities"].append(entity)
 
     # Register entity-level set_effect service (idempotent per platform)
     platform = entity_platform.async_get_current_platform()

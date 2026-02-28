@@ -6,6 +6,10 @@ LIGHT_TYPE_CODE = '01'
 SUPPORT_DEVICE_CATEGORY = [SWITCH_TYPE_CODE, LIGHT_TYPE_CODE]
 
 CONF_DEVICE_TYPE_CODE = "device_type_code"
+CONF_SUBNET = "subnet"
+CONF_DEVICES = "devices"
+
+PLATFORMS = ["light", "switch"]
 
 PLATFORMS_BY_TYPE = {
     LIGHT_TYPE_CODE: "light",

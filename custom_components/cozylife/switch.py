@@ -48,12 +48,24 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up CozyLife switch from a config entry."""
-    client = hass.data[DOMAIN][entry.entry_id]
-    data = entry.data
+    """Set up CozyLife switches from a hub config entry."""
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    clients = entry_data["clients"]
+    devices = entry_data["devices"]
 
-    entity = CozyLifeSwitch(client, hass)
-    async_add_entities([entity])
+    entities = []
+    for dev in devices:
+        device_type = dev.get(CONF_DEVICE_TYPE_CODE, "01")
+        if device_type != SWITCH_TYPE_CODE:
+            continue
+        client = clients.get(dev["did"])
+        if client is None:
+            continue
+        entity = CozyLifeSwitch(client, hass)
+        entities.append(entity)
+
+    if entities:
+        async_add_entities(entities)
 
 
 async def async_setup_platform(

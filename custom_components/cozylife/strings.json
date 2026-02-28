@@ -2,18 +2,23 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add CozyLife Device",
-        "description": "Enter the IP address of the CozyLife device.",
+        "title": "Add CozyLife Hub",
+        "description": "Enter the IP range to scan for CozyLife devices. Both IPs must be on the same /24 subnet.",
         "data": {
-          "ip_address": "IP Address"
+          "start_ip": "Start IP Address",
+          "end_ip": "End IP Address"
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to device. Check the IP address and ensure the device is powered on."
+      "cannot_connect": "No CozyLife devices found in the given IP range.",
+      "invalid_ip": "Invalid IP address format.",
+      "different_subnet": "Start and end IP must be on the same /24 subnet.",
+      "invalid_range": "End IP must be greater than or equal to start IP."
     },
     "abort": {
-      "already_configured": "This device is already configured. The IP address has been updated."
+      "already_configured": "This subnet hub is already configured.",
+      "device_added_to_hub": "Device added to existing hub. The hub will reload."
     }
   }
 }
