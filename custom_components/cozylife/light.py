@@ -268,7 +268,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
         self._attr_brightness = 0
 
         # Per-instance copy to avoid mutating class-level set
-        self._attr_supported_color_modes = {ColorMode.ONOFF}
+        self._attr_supported_color_modes = set()
 
         if not 'switch' in self._tcp_client._device_model_name.lower():
 
@@ -282,6 +282,18 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
             if 5 in tcp_client.dpid or 6 in tcp_client.dpid:
                 self._attr_color_mode = ColorMode.HS
                 self._attr_supported_color_modes.add(ColorMode.HS)
+
+        # Only use ONOFF if the light supports no other color/brightness modes
+        if not self._attr_supported_color_modes:
+            self._attr_supported_color_modes = {ColorMode.ONOFF}
+            self._attr_color_mode = ColorMode.ONOFF
+        elif ColorMode.ONOFF in self._attr_supported_color_modes:
+            self._attr_supported_color_modes.discard(ColorMode.ONOFF)
+        # In HA 2026.4+, COLOR_TEMP/HS imply brightness, so do not include BRIGHTNESS together
+        if ColorMode.COLOR_TEMP in self._attr_supported_color_modes and ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+            self._attr_supported_color_modes.discard(ColorMode.BRIGHTNESS)
+        if ColorMode.HS in self._attr_supported_color_modes and ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+            self._attr_supported_color_modes.discard(ColorMode.BRIGHTNESS)
 
     async def async_set_effect(self, effect: str):
         """Set the effect regardless it is On or Off."""
