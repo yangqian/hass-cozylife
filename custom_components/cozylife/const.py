@@ -5,6 +5,13 @@ SWITCH_TYPE_CODE = '00'
 LIGHT_TYPE_CODE = '01'
 SUPPORT_DEVICE_CATEGORY = [SWITCH_TYPE_CODE, LIGHT_TYPE_CODE]
 
+CONF_DEVICE_TYPE_CODE = "device_type_code"
+
+PLATFORMS_BY_TYPE = {
+    LIGHT_TYPE_CODE: "light",
+    SWITCH_TYPE_CODE: "switch",
+}
+
 # http://doc.doit/project-5/doc-8/
 SWITCH = '1'
 WORK_MODE = '2'

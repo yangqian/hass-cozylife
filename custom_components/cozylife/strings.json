@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add CozyLife Device",
+        "description": "Enter the IP address of the CozyLife device.",
+        "data": {
+          "ip_address": "IP Address"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to device. Check the IP address and ensure the device is powered on."
+    },
+    "abort": {
+      "already_configured": "This device is already configured. The IP address has been updated."
+    }
+  }
+}

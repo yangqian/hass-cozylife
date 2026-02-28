@@ -1,4 +1,5 @@
 {
+  "config_flow": true,
   "domain": "cozylife",
   "name": "cozylife light",
   "codeowners": ["@yangqian"],
@@ -8,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/yangqian/hass-cozylife/issues",
   "requirements": [],
-  "version": "0.5.0"
+  "version": "0.6.0"
 }

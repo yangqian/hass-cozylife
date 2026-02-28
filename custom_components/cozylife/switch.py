@@ -1,4 +1,4 @@
-"""Platform for sensor integration."""
+"""Platform for CozyLife switch integration."""
 from __future__ import annotations
 import logging
 from .tcp_client import tcp_client
@@ -6,31 +6,55 @@ from datetime import timedelta
 import asyncio
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.event import async_track_time_interval
 
-from typing import Any, Final, Literal, TypedDict, final
+from typing import Any
 from .const import (
     DOMAIN,
     SWITCH_TYPE_CODE,
-    LIGHT_TYPE_CODE,
-    LIGHT_DPID,
-    SWITCH,
-    WORK_MODE,
-    TEMP,
-    BRIGHT,
-    HUE,
-    SAT,
+    CONF_DEVICE_TYPE_CODE,
 )
 
-SCAN_INTERVAL = timedelta(seconds=20)
-
-_LOGGER = logging.getLogger(__name__)
-_LOGGER.info(__name__)
+import voluptuous as vol
+import homeassistant.helpers.config_validation as cv
 
 SCAN_INTERVAL = timedelta(seconds=240)
+
+_LOGGER = logging.getLogger(__name__)
+
+SWITCH_SCHEMA = vol.Schema({
+    vol.Required('ip'): cv.string,
+    vol.Required('did'): cv.string,
+    vol.Optional('dmn', default='Smart Switch'): cv.string,
+    vol.Optional('name'): cv.string,
+    vol.Optional('pid', default='p93sfg'): cv.string,
+    vol.Optional('dpid', default=[1]):
+        vol.All(cv.ensure_list, [int])
+})
+
+from homeassistant.components.switch import PLATFORM_SCHEMA
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Optional('switches', default=[]):
+        vol.All(cv.ensure_list, [SWITCH_SCHEMA])
+})
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up CozyLife switch from a config entry."""
+    client = hass.data[DOMAIN][entry.entry_id]
+    data = entry.data
+
+    entity = CozyLifeSwitch(client, hass)
+    async_add_entities([entity])
+
 
 async def async_setup_platform(
     hass: HomeAssistant,
@@ -38,56 +62,56 @@ async def async_setup_platform(
     async_add_devices: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None
 ) -> None:
-    """Set up the sensor platform."""
-    # We only want this platform to be set up via discovery.
-    # logging.info('setup_platform', hass, config, add_entities, discovery_info)
-    _LOGGER.info('setup_platform')
-    #_LOGGER.info(f'ip={hass.data[DOMAIN]}')
-    
-    #if discovery_info is None:
-    #    return
-
-
-    switches = []
-    for item in config.get('switches') or []:
-        client = tcp_client(item.get('ip'))
-        client._device_id = item.get('did')
-        client._pid = item.get('pid')
-        client._dpid = item.get('dpid')
-        client.name = item.get('name')
-        client._device_model_name = item.get('dmn')
-        switches.append(CozyLifeSwitch(client, hass))
-
-    async_add_devices(switches)
-    for switch in switches:
-        await hass.async_add_executor_job(switch._tcp_client._initSocket)
-        await asyncio.sleep(0.01)
-
-    async def async_update(now=None):
-        for switch in switches:
-            await hass.async_add_executor_job(switch._refresh_state)
-            await asyncio.sleep(0.01)
-    async_track_time_interval(hass, async_update, SCAN_INTERVAL)
+    """Import YAML configuration as config entries."""
+    _LOGGER.warning(
+        "Configuration of CozyLife switches via YAML is deprecated. "
+        "Your YAML config has been imported. Please remove it."
+    )
+    for item in config.get('switches', []):
+        import_data = {
+            "ip": item["ip"],
+            "did": item["did"],
+            "pid": item.get("pid", "p93sfg"),
+            "dmn": item.get("dmn", "Smart Switch"),
+            "dpid": item.get("dpid", [1]),
+            CONF_DEVICE_TYPE_CODE: SWITCH_TYPE_CODE,
+        }
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": "import"},
+                data=import_data,
+            )
+        )
 
 
 class CozyLifeSwitch(SwitchEntity):
     _tcp_client = None
     _attr_is_on = True
-    
+
     def __init__(self, tcp_client: tcp_client, hass) -> None:
         """Initialize the sensor."""
         _LOGGER.info('__init__')
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
-        self._name = tcp_client.name or tcp_client.device_id[-4:]
-        self._refresh_state()
+        self._name = getattr(tcp_client, 'name', None) or tcp_client.device_id[-4:]
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for device registry."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._unique_id)},
+            name=self._tcp_client._device_model_name,
+            manufacturer="CozyLife",
+            model=self._tcp_client._pid,
+        )
 
     @property
     def unique_id(self) -> str | None:
         """Return a unique ID."""
         return self._unique_id
-        
+
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
 
@@ -96,11 +120,11 @@ class CozyLifeSwitch(SwitchEntity):
         _LOGGER.info(f'_name={self._name},_state={self._state}')
         if self._state:
             self._attr_is_on = 0 < self._state['1']
-    
+
     @property
     def name(self) -> str:
         return 'cozylife:' + self._name
-    
+
     @property
     def available(self) -> bool:
         """Return if the device is available."""
@@ -108,12 +132,12 @@ class CozyLifeSwitch(SwitchEntity):
             return True
         else:
             return False
-    
+
     @property
     def is_on(self) -> bool:
         """Return True if entity is on."""
         return self._attr_is_on
-    
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
         self._attr_is_on = True
@@ -125,7 +149,7 @@ class CozyLifeSwitch(SwitchEntity):
         })
 
         return None
-    
+
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
         self._attr_is_on = False
@@ -135,5 +159,5 @@ class CozyLifeSwitch(SwitchEntity):
         await self.hass.async_add_executor_job(self._tcp_client.control, {
             '1': 0
         })
-        
+
         return None
