@@ -1,12 +1,12 @@
 {
   "domain": "cozylife",
   "name": "cozylife light",
-  "documentation": "https://github.com/yangqian/hass-cozylife",
-  "dependencies": [],
   "codeowners": ["@yangqian"],
-  "requirements": [],
+  "dependencies": [],
+  "documentation": "https://github.com/yangqian/hass-cozylife",
+  "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/yangqian/hass-cozylife/issues",
-  "integration_type": "hub",
+  "requirements": [],
   "version": "0.5.0"
 }
