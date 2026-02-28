@@ -52,8 +52,7 @@ class tcp_client(object):
 
     def disconnect(self):
         if self._connect:
-            try: 
-                #self._connect.shutdown(socket.SHUT_RDWR)
+            try:
                 self._connect.close()
             except:
                 pass
@@ -69,7 +68,7 @@ class tcp_client(object):
             s.connect((self._ip, self._port))
             self._connect = s
         except:
-            _LOGGER.info(f'_initSocketerror,ip={self._ip}')
+            _LOGGER.debug('Connection failed for ip=%s', self._ip)
             self.disconnect()
 
     @property
@@ -115,22 +114,17 @@ class tcp_client(object):
                 return None
             resp_json = json.loads(resp.strip())
         except:
-            _LOGGER.info('_device_info.recv.error')
+            _LOGGER.debug('Failed to parse device info response')
             return None
 
         if resp_json.get('msg') is None or type(resp_json['msg']) is not dict:
-            _LOGGER.info('_device_info.recv.error1')
-
             return None
 
         if resp_json['msg'].get('did') is None:
-            _LOGGER.info('_device_info.recv.error2')
-
             return None
         self._device_id = resp_json['msg']['did']
 
         if resp_json['msg'].get('pid') is None:
-            _LOGGER.info('_device_info.recv.error3')
             return None
 
         self._pid = resp_json['msg']['pid']
@@ -150,12 +144,8 @@ class tcp_client(object):
                 self._device_type_code = item['device_type_code']
                 break
 
-        # _LOGGER.info(pid_list)
-        _LOGGER.info(self._device_id)
-        _LOGGER.info(self._device_type_code)
-        _LOGGER.info(self._pid)
-        _LOGGER.info(self._device_model_name)
-        _LOGGER.info(self._icon)
+        _LOGGER.debug('Device discovered: did=%s, pid=%s, type=%s',
+                      self._device_id, self._pid, self._device_type_code)
 
     def _get_package(self, cmd: int, payload: dict) -> bytes:
         """
@@ -195,7 +185,6 @@ class tcp_client(object):
             raise Exception('CMD is not valid')
 
         payload_str = json.dumps(message, separators=(',', ':',))
-        _LOGGER.info(f'_package={payload_str}')
         return bytes(payload_str + "\r\n", encoding='utf8')
 
     def _send_receiver(self, cmd: int, payload: dict) -> Union[dict, Any]:
@@ -218,7 +207,6 @@ class tcp_client(object):
             i = 10
             while i > 0:
                 res = self._connect.recv(1024)
-                # print(f'res={res},sn={self._sn},{self._sn in str(res)}')
                 i -= 1
                 # only allow same sn
                 if self._sn in str(res):
@@ -237,8 +225,7 @@ class tcp_client(object):
             return None
 
         except Exception as e:
-            # print(f'e={e}')
-            _LOGGER.info(f'_only_send.recv.error:{e}')
+            _LOGGER.debug('recv error: %s', e)
             return None
 
     def _only_send(self, cmd: int, payload: dict) -> None:

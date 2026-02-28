@@ -102,8 +102,7 @@ class CozyLifeSwitch(SwitchEntity):
     _attr_is_on = True
 
     def __init__(self, tcp_client: tcp_client, hass) -> None:
-        """Initialize the sensor."""
-        _LOGGER.info('__init__')
+        """Initialize."""
         self.hass = hass
         self._tcp_client = tcp_client
         self._unique_id = tcp_client.device_id
@@ -129,7 +128,6 @@ class CozyLifeSwitch(SwitchEntity):
 
     def _refresh_state(self):
         self._state = self._tcp_client.query()
-        _LOGGER.info(f'_name={self._name},_state={self._state}')
         if self._state:
             self._attr_is_on = 0 < self._state['1']
 
@@ -154,8 +152,6 @@ class CozyLifeSwitch(SwitchEntity):
         """Turn the entity on."""
         self._attr_is_on = True
 
-        _LOGGER.info(f'turn_on:{kwargs}')
-
         await self.hass.async_add_executor_job(self._tcp_client.control, {
             '1': 1
         })
@@ -165,8 +161,6 @@ class CozyLifeSwitch(SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
         self._attr_is_on = False
-
-        _LOGGER.info('turn_off')
 
         await self.hass.async_add_executor_job(self._tcp_client.control, {
             '1': 0

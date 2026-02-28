@@ -30,7 +30,7 @@ def get_pid_list(lang='en') -> list:
     url_prefix = protocol + '://' + domain
     try:
         res = requests.get(url_prefix + '/api/device_product/model', params={'lang': lang}, timeout=3)
-        res.raise_for_status()  # Raise an HTTPError for bad responses
+        res.raise_for_status()
     except requests.exceptions.RequestException as e:
         _LOGGER.error(f'Error making API request: {e}')
         return []
@@ -42,12 +42,12 @@ def get_pid_list(lang='en') -> list:
         return []
 
     if pid_list.get('ret') is None or pid_list['ret'] != '1':
-        _LOGGER.info('get_pid_list.result is not as expected')
+        _LOGGER.warning('get_pid_list: unexpected API response')
         return []
 
     info = pid_list.get('info')
     if info is None or not isinstance(info, dict) or info.get('list') is None or not isinstance(info['list'], list):
-        _LOGGER.info('get_pid_list.result structure is not as expected')
+        _LOGGER.warning('get_pid_list: unexpected response structure')
         return []
 
     _CACHE_PID = info['list']
