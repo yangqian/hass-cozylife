@@ -123,6 +123,10 @@ class CozyLifeSwitch(SwitchEntity):
         """Return a unique ID."""
         return self._unique_id
 
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        await self.hass.async_add_executor_job(self._refresh_state)
+
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
 

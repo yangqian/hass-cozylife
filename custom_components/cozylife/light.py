@@ -185,6 +185,10 @@ class CozyLifeSwitchAsLight(LightEntity):
         """Return a unique ID."""
         return self._unique_id
 
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        await self.hass.async_add_executor_job(self._refresh_state)
+
     async def async_update(self):
         await self.hass.async_add_executor_job(self._refresh_state)
 
@@ -588,10 +592,10 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if not last_state:
-            return
-        if 'last_effect' in last_state.attributes:
+        if last_state and 'last_effect' in last_state.attributes:
             self._effect = last_state.attributes['last_effect']
+        # Query device for initial state
+        await self.hass.async_add_executor_job(self._refresh_state)
 
     @property
     def extra_state_attributes(self):
