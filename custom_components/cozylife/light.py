@@ -416,6 +416,7 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
                     self._attr_brightness = brightness
                     self._attr_color_mode = ColorMode.COLOR_TEMP
                     colortemp_kelvin = self.calc_color_temp_kelvin()
+                    self._attr_color_temp_kelvin = colortemp_kelvin
                     payload['3'] = round(
                         (colortemp_kelvin - self._attr_min_color_temp_kelvin) / self._kelvin_ratio)
                     if self._transitioning !=0:
