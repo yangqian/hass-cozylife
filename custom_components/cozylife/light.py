@@ -424,16 +424,23 @@ class CozyLifeLight(CozyLifeSwitchAsLight,RestoreEntity):
                     if transition is None:
                         transition=5
             elif self._effect == 'sleep':
-                    payload['4'] = 4
-                    payload['3'] = 0
                     payload['4'] = 12
+                    payload['3'] = 0
                     self._attr_color_mode = ColorMode.COLOR_TEMP
+                    self._attr_brightness = round(12 / 1000 * 255)
+                    self._attr_color_temp_kelvin = self._attr_min_color_temp_kelvin
             elif self._effect == 'study':
                     payload['4'] = 1000
                     payload['3'] = 1000
+                    self._attr_color_mode = ColorMode.COLOR_TEMP
+                    self._attr_brightness = 255
+                    self._attr_color_temp_kelvin = self._attr_max_color_temp_kelvin
             elif self._effect == 'warm':
                     payload['4'] = 1000
                     payload['3'] = 0
+                    self._attr_color_mode = ColorMode.COLOR_TEMP
+                    self._attr_brightness = 255
+                    self._attr_color_temp_kelvin = self._attr_min_color_temp_kelvin
             elif self._effect == 'chrismas':
                     payload['2'] = 1
                     payload['4'] = 1000
